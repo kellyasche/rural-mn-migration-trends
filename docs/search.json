@@ -77,27 +77,6 @@
     "text": "Updated numbers\nSince this report in 2021, they have published updated numbers on the in-flows and out-flows of metropolitan areas.\n\n“In 2024:Q1, net outflows of migrants from urban neighborhoods, as measured by a four-quarter moving average, rose for the first time since mid-2021 (Figure 1), increasing from 113,800 to 116,900 per quarter.” (Whitaker, 2021, p. 1)\n“Net outflows accelerated in 8 of the 10 most populous urban centers, with notable increases in the San Francisco and Miami metro areas (Figure 2).” (Whitaker, 2021, p. 1)\n“A dozen metro areas have recently seen net urban migration above their prepandemic (2010–2019) trend lines.” (Whitaker, 2021, p. 1)\n\nSo, let’s see how Minneapolis is faring.\nIn the following charts, Minneapolis is defined as the Census Statistical Area - 19 counties along with 2 Wisconsin counties.\nThe chart below is the four quarter moving average of net migration for the Minneapolis CSA. The black line is the actual values of average migration, the blue line is the trend line from before the pandemic (before 2020-01-01) and the green line is the “recovery” line which starts on 2020-04-01. Before the pandemic, the trend line for the region was actually towards a net out-migration. When the pandemic hit there was actually a significant loss in net migration and since that time there’s been a recovery to their former trend line.\n\n\n\n\n\n\n\n\nNow, it’s important to remember that net migration is the sum of two different, opposing actions - people coming in minus the people that are leaving. It could be that one of these has changed more significantly than the other, such as very few people moving into the MSA while the number of people leaving has remained unchanged.\nAnd in fact, the author points this out in his 2021 article;\n\nAn increase in the net out-migration from urban neighborhoods can be driven either by an increase in people moving out or by a decrease in people moving in. Figure 2 shows that the decline of in-migration is actually the larger driver. The average of monthly out-migration was 276,000 in March through September 2020. This is 10,000 more than its average of 266,000 for the same months in 2017 through 2019. The larger change was for in-migration, which fell 18,000—from an average of 238,000 in 2017 to 2019—to 220,000 in 2020 (Whitaker, 2021)\n\n\n\n\n\nSource: Federal Reserve Bank of New York/Equifax Consumer Credit Panel, American Community Survey, and author’s calculations.\n\n\n\nThe following numbers represent the change in gross and net outflows from the Minneapolis-St.Paul-Bloomington CSA. The change is calculated as the difference between the flow in April to September 2020 from the average from the same months in 2017, 2018, and 2019.\nChange in Outflow: 9,000 migrants per month more than average leaving the metro\nChange in Inflow: -25,000 migrants per month more than average coming into the metro\nThere are two points to made here.\nFirst, there were signficant differences in both the inflows and outflows of migration in the Twin Cities metro CSA - there were 9,000 more people per month migrating out of the Twin Cities CSA compared to the 2017, 2018, and 2019 average. In addition, there were 25,000 LESS people per month migrating into the Twin Cities CSA compared to 2017, 2018, and 2019.\nSecond, the larger driver of the total net migration was actually that there were far LESS people moving into the Twin Cities Metro CSA.\nHere is the chart provided for the Twin Cities CSA that was in the report."
   },
   {
-    "objectID": "index.html",
-    "href": "index.html",
-    "title": "Testing",
-    "section": "",
-    "text": "Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see https://quarto.org."
-  },
-  {
-    "objectID": "index.html#quarto",
-    "href": "index.html#quarto",
-    "title": "Testing",
-    "section": "",
-    "text": "Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see https://quarto.org."
-  },
-  {
-    "objectID": "index.html#running-code",
-    "href": "index.html#running-code",
-    "title": "Testing",
-    "section": "Running Code",
-    "text": "Running Code\nWhen you click the Render button a document will be generated that includes both content and the output of embedded code. You can embed code like this:\n\n1 + 1\n\n[1] 2\n\n\nYou can add options to executable code like this\n\n\n[1] 4\n\n\nThe echo: false option disables the printing of code (only output is displayed)."
-  },
-  {
     "objectID": "Data/IPUMS/Description of analysis.html",
     "href": "Data/IPUMS/Description of analysis.html",
     "title": "Rural MN Migration Trends",
