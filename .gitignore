@@ -39,11 +39,14 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
-# pkgdown site
-docs/
-
 # translation temp files
 po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+/Data
+/ipums_analysis_cache/
+/lit_review_cache/
+
+/.quarto/

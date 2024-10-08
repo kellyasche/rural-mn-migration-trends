@@ -1,0 +1,752 @@
+---
+title: "IPUMS Analysis"
+format: html
+editor: visual
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 4
+runtime: shiny
+resource_files:
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.cpg
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.dbf
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.prj
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.sbn
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.sbx
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.shp.xml
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.shx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(sf)
+library(ggrepel)
+library(scales)
+library(shiny)
+library(shinycssloaders)
+library(ggiraph)
+library(kableExtra)
+library(rmapshaper)
+library(cowplot)
+library(DT)
+library(htmlwidgets)
+library(RColorBrewer)
+library(readxl)
+library(janitor)
+library(lubridate)
+library(systemfonts)
+reset_font_cache()
+library(ggtext)
+library(readxl)
+library(zoo)
+```
+
+```{r loading jon docs and shapefiles, cache=TRUE, include=FALSE}
+theme_bar <- theme_bw() +
+  theme(panel.grid.major = element_line(color = "grey70", linewidth  = 0.1),
+        panel.grid.minor = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_text(face = "bold"),
+        panel.border = element_blank(),
+        legend.background = element_rect(fill = "transparent", color = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.key.size = unit(1, "lines"),
+        legend.margin = margin(0,0,0,0),
+        legend.title = element_blank(),
+        legend.text = element_text(margin = margin(l = 2)),
+        text = element_text(family = "Arial") ,
+        plot.title.position = "plot",
+        plot.title = element_text(face = "bold"))
+
+theme_line <- theme_bw() +
+  theme(legend.background = element_rect(fill = "transparent", color = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.text = element_text(margin = margin(l = 2)),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_line(color = "grey70", linewidth = 0.1),
+        axis.ticks = element_blank(),
+        axis.text = element_text(face = "bold"),
+        panel.border = element_blank(),
+        legend.margin = margin(0,0,0,0),
+        legend.key.size = unit(1, "lines"),
+        text = element_text(family = "Arial") ,
+        plot.title.position = "plot",
+        plot.title = element_text(face = "bold"))
+
+
+theme_sf <- theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_line(color = "white"),
+        panel.border = element_blank(),
+        legend.title = element_blank(),
+        legend.text = element_text(margin = margin(l = 2)),
+        legend.margin = margin(0,0,0,0),
+        legend.key.size = unit(1, "lines"),
+        text = element_text(family = "Arial") ,
+        plot.title.position = "plot",
+        plot.title = element_text(face = "bold"))
+
+regions <- read_csv("/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasche@ruralmn.org/My Drive/Data Prep/R Projects/Join docs/county_regions.csv") %>%
+    select(5,6) %>%
+    unique() %>%
+    mutate(edr = str_replace(edr, "  ", " "),
+           planning.region = str_replace(planning.region, " Minnesota", ""),
+           planning.region = fct_relevel(planning.region, "Northwest", "Northeast", "Central", "Seven County Mpls-St Paul", "Southwest", "Southeast"),
+           edr = fct_relevel(edr, "EDR 1 - Northwest", "EDR 2 - Headwaters", "EDR 3 - Arrowhead", "EDR 4 - West Central", "EDR 5 - North Central", "EDR 6E- Southwest Central", "EDR 6W- Upper Minnesota Valley", "EDR 7E- East Central", "EDR 7W- Central", "EDR 8 - Southwest", "EDR 9 - South Central", "EDR 10 - Southeast", "EDR 11 - 7 County Twin Cities", "Minnesota"))
+
+counties.regions <- read_csv("/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasche@ruralmn.org/My Drive/Data Prep/R Projects/Join docs/county_regions.csv") %>%
+  rename(mif = `MIF Region`) %>%
+  mutate(countyfp = formatC(countyfp, width = 3, flag = "0"),
+         Name = str_to_title(Name),
+         Name = str_replace(Name, "Q", "q"),
+         Name = str_replace(Name, "Of The", "of the"),
+         Name = str_replace(Name, "Mcleod", "McLeod"),
+         Dem_Desc = ifelse(Name == "Minnesota", "Minnesota", Dem_Desc) ,
+         edr = str_replace(edr, "  ", " "),
+         planning.region = str_replace(planning.region, " Minnesota", ""),
+         planning.region = fct_relevel(planning.region, "Northwest", "Northeast", "Central", "Seven County Mpls-St Paul", "Southwest", "Southeast"),
+         edr = fct_relevel(edr, "EDR 1 - Northwest", "EDR 2 - Headwaters", "EDR 3 - Arrowhead", "EDR 4 - West Central", "EDR 5 - North Central", "EDR 6E- Southwest Central", "EDR 6W- Upper Minnesota Valley", "EDR 7E- East Central", "EDR 7W- Central", "EDR 8 - Southwest", "EDR 9 - South Central", "EDR 10 - Southeast", "EDR 11 - 7 County Twin Cities", "Minnesota"),
+         mif = ifelse(is.na(mif), "TC", mif),
+         mif = as.factor(mif),
+         mif = fct_relevel(mif, "NW", "NE", "WC", "EC", "SW", "SE", "TC"))
+
+
+color.ruca <- c("Entirely rural" = "#009933", "Town/rural mix" = "#99CC33", "Urban/town/rural mix" = "#CC9966", "Entirely urban" = "#754C29", "Minnesota" = "black")
+
+color.pr <- c("Northwest" = 	"#4575b4", "Northeast" = "grey", "Central" = "#fee090", "Seven County Mpls-St Paul" = "#d73027", "Southwest" = "#91bfdb", "Southeast" = "#fc8d59", "Minnesota" = "black")
+
+color.edr <- c("EDR 1 - Northwest" = "#b3cde3", "EDR 2 - Headwaters" = "#8c96c6", "EDR 3 - Arrowhead" = "#fe9929", "EDR 4 - West Central" = "#8856a7", "EDR 5 - North Central" = "#810f7c", "EDR 6E- Southwest Central" = "#e5f5f9", "EDR 6W- Upper Minnesota Valley" = "#bdc9e1", "EDR 7E- East Central" = "#99d8c9", "EDR 7W- Central" = "#2ca25f", "EDR 8 - Southwest" = "#74a9cf", "EDR 9 - South Central" = "#0570b0", "EDR 10 - Southeast" = "#d7301f", "EDR 11 - 7 County Twin Cities" = "#d8b365", "Minnesota" = "black")
+
+color.pr.edr <- c ("Northwest" = "#4575b4","Northeast" = "#e0f3f8", "Central" = "#fee090", "Seven County Mpls-St Paul" = "#d73027", "Southwest" = "#91bfdb", "Southeast" = "#fc8d59", "Minnesota" = "black", "EDR 1 - Northwest" = "#b3cde3", "EDR 2 - Headwaters" = "#8c96c6", "EDR 3 - Arrowhead" = "#fe9929", "EDR 4 - West Central" = "#8856a7", "EDR 5 - North Central" = "#810f7c", "EDR 6E- Southwest Central" = "#e5f5f9", "EDR 6W- Upper Minnesota Valley" = "#bdc9e1", "EDR 7E- East Central" = "#99d8c9", "EDR 7W- Central" = "#2ca25f", "EDR 8 - Southwest" = "#74a9cf", "EDR 9 - South Central" = "#0570b0", "EDR 10 - Southeast" = "#d7301f", "EDR 11 - 7 County Twin Cities" = "#d8b365")
+
+mn_counties <- st_read("/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasche@ruralmn.org/My Drive/Data Prep/R Projects/Shapefiles/County shapefiles/MNCounties_MNDOT.shp", quiet = TRUE) %>%
+  ms_simplify(keep = .01, keep_shapes = TRUE) %>%
+  rename(countyfp = FIPS_CODE)
+
+```
+
+# IPUMS Migration Data
+
+I emailed Stephan Whitaker to see if he could provide me the dataset highlighting the flows and he was unable to. But he did send me the following instructions on how to use the IPUMS dataset that might help highlight the trend.
+
+Unfortunately, I didn’t get permission to release the gross flows. If I was going to try to make those myself with public data, I would take these steps:
+
+-   Download 5 or 10 years of ACS microdata from IPUMS. Select the migration variable, year, PUMAs, MIGPUMAs and person weights.
+
+-   Drop everyone who hasn’t moved in the last year based on the value in the migration variable.
+
+-   Merge on lists of PUMAs and MIGPUMAs in the Minneapolis MSA.
+
+-   Drop any mover who has both a Minneapolis MIGPUMA and a Minneapolis PUMA (those are local moves you’re not interested in).
+
+-   Sum up the person weights within each year for movers with a Minneapolis MIGPUMA. That’s an annual estimate of out-migration from the metro.
+
+-   Sum up the person weights within each year for movers with a Minneapolis PUMA. That’s the annual estimate of in-migrants.
+
+So, that's what I'm going to do here.
+
+First, let's import the dataset.
+
+```{r import master ipums migration data}
+library(ipumsr)
+
+ipums.original <- read_ipums_micro(ddi = '/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasche@ruralmn.org/My Drive/Research/FY25-27/FY25/Rural MN migration trends/rural-mn-migration-trends/Data/IPUMS/usa_00009.xml', data_file = '/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasche@ruralmn.org/My Drive/Research/FY25-27/FY25/Rural MN migration trends/rural-mn-migration-trends/Data/IPUMS/usa_00009.dat.gz') %>%
+  mutate(STATEFIP = formatC(STATEFIP, width = 3, flag = "0"),
+         MIGPLAC1 = formatC(MIGPLAC1, width = 3, flag = "0"))
+```
+
+This is a massive dataset. It contains `r comma(nrow(data))` rows with the following variables;
+
+```{r ipums variable table}
+kable(names(ipums.original))
+```
+
+Here are the definitions of those variables.
+
+```{r variable definitions}
+
+ipums.var.def <- read_xlsx('/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasche@ruralmn.org/My Drive/Research/FY25-27/FY25/Rural MN migration trends/rural-mn-migration-trends/Data/IPUMS/variable definitions.xlsx')
+
+kable(ipums.var.def)
+
+```
+
+## Filter data
+
+There are multiple steps I'm taking here.
+
+1.  Remove non-movers: Remove individuals that have not moved at all or are unknown.
+2.  Categorize PUMAs and MIGPUMAs into logical taxonomies;
+    -   Metro vs Greater MN: this just aggregates all PUMA and MIGPUMA into whether they are in the seven county metro vs. the rest of Minnesota.
+
+    -   Metro vs. Refined Greater MN: this will aggregate PUMAs into a seven county metro category and aggregate the other PUMAs into something that mimics the plannig regions of Minensota - NW, NE, Central, SW, SE PUMAS.
+
+### Remove non-movers
+
+First, we need to get rid of anyone that hasn't moved at all for each census year. We will use the MIGRATE1 variable which has the following codes;
+
+-   0 - N/A
+
+-   1 - Same house a year ago
+
+-   2 - Moved within state since a year ago
+
+-   3 - Moved between states since a year ago
+
+-   4 - Abroad one year ago
+
+-   9 - Unknown
+
+So, let's filter out everyone that is either 0, 1, or 9. In order to decrease the size of the file, I have already filtered these out when I submitted my request for the data. So my dataset doesn't have any individuals that were categorized as such.
+
+## Categorize PUMAs and MIGPUMAs
+
+The two primary variables IPUMS uses to track inflow and outflow of migration is PUMA and MIGPUMA. PUMA identifies the Public Use Microdata Area (PUMA) where the housing unit was located. PUMAs are the smallest geographic units identified in Public Use Microdata Samples since 1990 for both the decennial censuses and the ACS/PRCS. To help maintain the confidentiality of respondents in public use microdata, every PUMA must, by design, have at least 100,000 residents at the time of the corresponding census.\
+\
+Note: PUMA codes are state-dependent. The PUMA codes for 1990 and later samples are unique only within each state, so a single code may identify different PUMAs in different states. To uniquely identify all PUMAs, it is necessary to combine the PUMA variable with a state identifier (STATEFIP or STATEICP). The IPUMS-defined 1960 PUMA codes are unique across all states and do not have this requirement.
+
+The definitions of Migration Public Use Microdata Areas (Migration PUMAs) are used in ACS and PRCS samples to identify where respondents moved from. See the [MIGPUMA1](https://usa.ipums.org/usa-action/variables/MIGPUMA1) variable description for more information.\
+\
+Here are the codes that represent the PUMAs.
+
+<br>
+
+```{r puma names}
+puma.names <- read_csv("Data/IPUMS/PUMA reference/Master-PUMA-Names.csv") %>%
+  select(YEAR, STATEFP, PUMA5CE, `PUMA NAME`)
+
+datatable(puma.names,
+          filter = "top",
+          rownames = FALSE)
+```
+
+<br>
+
+And here are the migration puma codes that cross reference the PUMA codes.
+
+<br>
+
+```{r migration puma names}
+m.puma.names <- read_csv("Data/IPUMS/MIGPUMA reference/Master-migration-puma-names.csv") %>%
+  mutate(MIGPUMA1 = as.integer(MIGPUMA1)) %>%
+  select(STATEFP, PUMA, MIGPUMA1, YEAR, `PUMA NAME`)
+
+
+datatable(m.puma.names,
+          filter = "top",
+          rownames = FALSE)
+
+```
+
+<br>
+
+Unfortunately, the PUMA and MIGPUMA codes from 2010 to 2021 don't compare nicely to 2022.
+
+The maps below provide the PUMA and migration PUMA boundaries from 2010 to 2021 and than 2022's version. We notice that the migraiton PUMAs fit into each or within multiple PUMA boundaries for each of the year breakdowns. So there is no problem compaing PUMA and migration PUMA.
+
+Unfortunately, the PUMA boundaries change too much in order to compare the 2010-2021 PUMA with the 2022 PUMA.
+
+<br>
+
+```{r puma and migration puma maps}
+puma.2010.original <- st_read("Data/IPUMS/PUMA reference/ipums_puma_2010/ipums_puma_2010.shp", quiet = TRUE)
+
+puma.2010.mn <- puma.2010.original %>%
+  mutate(,
+         STATEFIP = as.integer(STATEFIP),
+         STATEFIP = formatC(STATEFIP, width = 3, flag = "0")) %>%
+  filter(STATEFIP == "027") %>%
+  mutate(year = "2010-2021")
+
+puma.2020.original <- st_read("Data/IPUMS/PUMA reference/ipums_puma_2020/ipums_puma_2020.shp", quiet = TRUE)
+
+puma.2020.mn <- puma.2020.original %>%
+  mutate(STATEFIP = as.integer(STATEFIP),
+         STATEFIP = formatC(STATEFIP, width = 3, flag = "0")) %>%
+  filter(STATEFIP == "027") %>%
+  mutate(year = "2022")
+
+puma.2010.2020.mn <- puma.2010.mn %>%
+  rbind(puma.2020.mn) %>%
+  mutate(data_id = seq(n()))
+
+puma.2010.2020.mn.map <- ggplot(puma.2010.2020.mn) +
+  geom_sf_interactive(fill = "transparent", aes(geometry = geometry, color = year, data_id = data_id, tooltip = paste(year, "\n", PUMA, "\nName: ", Name, sep = ""))) +
+  facet_wrap(~year, ncol = 1) +
+  theme_sf+
+  scale_color_manual(values = c("#ca0020", "#0571b0")) +
+  labs(title = "PUMAs") +
+  theme(legend.position = "none",
+        text = element_text(size = 18))
+
+mig.puma.2010.original <- st_read("Data/IPUMS/MIGPUMA reference/ipums_migpuma_pwpuma_2010/ipums_migpuma_pwpuma_2010.shp", quiet = TRUE)
+
+mig.puma.2020.original <- st_read("Data/IPUMS/MIGPUMA reference/ipums_migpuma_pwpuma_2020/ipums_migpuma_pwpuma_2020.shp", quiet = TRUE)
+
+mig.puma.2010.mn <- mig.puma.2010.original %>%
+  mutate(STATEFIP = as.integer(STATEFIP),
+         STATEFIP = formatC(STATEFIP, width = 3, flag = "0")) %>%
+  filter(STATEFIP == "027") %>%
+  mutate(year = "2010-2021")
+
+mig.puma.2020.mn <- mig.puma.2020.original %>%
+  mutate(STATEFIP = as.integer(STATEFIP),
+         STATEFIP = formatC(STATEFIP, width = 3, flag = "0")) %>%
+  filter(STATEFIP == "027") %>%
+  mutate(year = "2022")
+
+mig.puma.2010.2020.mn <- mig.puma.2010.mn %>%
+  rbind(mig.puma.2020.mn)
+
+mig.puma.2010.2020.mn.map <- ggplot(mig.puma.2010.2020.mn) +
+  geom_sf_interactive(fill = "transparent", aes(geometry = geometry, color = year, data_id = MIGPUMA, tooltip = paste(year, "\n", MIGPUMA, sep = ""))) +
+  facet_wrap(~year, ncol = 1) +
+  theme_sf+
+  scale_color_manual(values = c("#ca0020", "#0571b0")) +
+  labs(title = "Migration PUMAs") +
+  theme(legend.position = "none",
+        text = element_text(size = 18))
+
+plot <- plot_grid(puma.2010.2020.mn.map, mig.puma.2010.2020.mn.map, ncol = 2, rel_widths = c(1,1))
+
+girafe(ggobj = plot, width_svg = 7, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+```
+
+<br>
+
+Overall that means we need to create categories that align all the way across. It will be very difficult to do by geography. For example, if we try to combine PUMAs to create a Northwest region, there is no way to create a Northwest region from 2010-2021 PUMA to 2022 PUMA. They don't match. If we want to see trends in migration flow by geography we will have to keep 2010-2021 data separate from 2022. That won't be a problem and will still be interesting.
+
+Now we can aggregate these areas into larger geographies so it's easier to analyze. There are fewer migration PUMAs and so if we aggregate some of those then it will be easier to have the PUMAs follow.
+
+The hope is that we can kind of keep the larger cities in each aggregate PUMA between the 2010-2021 definitions and the 2022 definition. For example, making sure Mankato is in the same region in the 2010-2021 taxonomy as the 2022 taxonomy, even when the PUMA area it's located is changes.
+
+**MIGPUMA**
+
+-   2010-2021
+
+    -   Northwest: 100, 200, 800
+
+    -   Northeast: 390
+
+    -   Central: 700, 600, 1900
+
+    -   St. Cloud: 900, 1800, 1000
+
+    -   Southwest: 2000, 2100, 2200
+
+    -   Southeast: 2400, 2300, 2500, 2600
+
+    -   Rochester: 02500
+
+-   2022
+
+    -   Northwest: 190, 700,
+
+    -   Northeast: 390
+
+    -   Central: 600, 1200, 2100
+
+    -   St. Cloud: 990
+
+    -   Southwest: 800, 2200, 2300, 2400,
+
+    -   Southeast: 2500, 2600, 2800, 2700
+
+    -   Rochester: 2700
+
+The maps below are the PUMA and MIGPUMA boundaries for 2010 - 2021 and 2022 along with the geographic taxonomy. They match, so we are all good to go.
+
+<br>
+
+```{r puma and migpuma geo taxonomy}
+migpuma.mn.geo <- mig.puma.2010.2020.mn %>%
+  mutate(mn.geo = ifelse(MIGPUMA %in% c("00100", "00200", "00800") & year == "2010-2021", "Northwest", MIGPUMA),
+         mn.geo = ifelse(MIGPUMA %in% c("00190", "00700") & year == "2022", "Northwest", mn.geo),
+         mn.geo = ifelse(MIGPUMA == "00390" & year == "2010-2021", "Northeast", mn.geo),
+         mn.geo = ifelse(MIGPUMA == "00390" & year == "2022", "Northeast", mn.geo),
+         mn.geo = ifelse(MIGPUMA %in% c("00700", "00600", "01900") & year == "2010-2021", "Central", mn.geo),
+         mn.geo = ifelse(MIGPUMA %in% c("00600", "01200", "02100") & year == "2022", "Central", mn.geo),
+         mn.geo = ifelse(MIGPUMA %in% c("00900", "01000", "01800") & year == "2010-2021", "St. Cloud", mn.geo),
+         mn.geo = ifelse(MIGPUMA %in% c("02001") & year == "2022", "St. Cloud", mn.geo),
+         mn.geo = ifelse(MIGPUMA %in% c("02000", "02100", "02200") & year == "2010-2021", "Southwest", mn.geo),
+         mn.geo = ifelse(MIGPUMA %in% c("00800", "02200", "02300", "02400") & year == "2022", "Southwest", mn.geo),
+         mn.geo = ifelse(MIGPUMA %in% c("02400", "02300", "02500", "02600") & year == "2010-2021", "Southeast", mn.geo),
+         mn.geo = ifelse(MIGPUMA %in% c("02500", "02600", "02800", "02700") & year == "2022", "Southeast", mn.geo),
+         mn.geo = ifelse(!mn.geo %in% c("Northwest", "Northeast", "Central", "Southwest", "Southeast"), "Seven county metro", mn.geo),
+         mn.geo = fct_relevel(mn.geo, "Northwest", "Northeast", "Central", "Seven county metro", "Southwest", "Southeast"))
+
+master.puma.2010.2021 <- m.puma.names %>%
+  filter(YEAR == 2010) %>%
+  mutate(YEAR = "2010-2021",
+         MIGPUMA1 = formatC(MIGPUMA1, width = 5, flag = "0")) %>%
+  left_join(migpuma.mn.geo[,c(4,5,8,9,10)], by = c("STATEFP" = "MIGPLAC", "MIGPUMA1" = "MIGPUMA", "YEAR" = "year")) %>%
+  rename(MIGPUMA.geometry = geometry) %>%
+  select(YEAR, STATEFP, PUMA, MIGPUMA1, `PUMA NAME`, mn.geo, MIGPUMA.geometry) %>%
+  rename(MIGPUMA = MIGPUMA1) %>%
+  mutate(PUMA = formatC(PUMA, width = 5, flag = "0")) %>%
+  left_join(puma.2010.mn[,c(4,6,8,9)], by = c("STATEFP" = "STATEFIP", "PUMA", "YEAR" = "year")) %>%
+  rename(PUMA.geometry = geometry)
+
+master.puma.2022 <- m.puma.names %>%
+  filter(YEAR == 2022) %>%
+  mutate(YEAR = "2022",
+         MIGPUMA1 = formatC(MIGPUMA1, width = 5, flag = "0")) %>%
+  left_join(migpuma.mn.geo[,c(4,5,8,9,10)], by = c("STATEFP" = "MIGPLAC", "MIGPUMA1" = "MIGPUMA", "YEAR" = "year")) %>%
+  rename(MIGPUMA.geometry = geometry) %>%
+  select(YEAR, STATEFP, PUMA, MIGPUMA1, `PUMA NAME`, mn.geo, MIGPUMA.geometry) %>%
+  rename(MIGPUMA = MIGPUMA1) %>%
+  mutate(PUMA = formatC(PUMA, width = 5, flag = "0")) %>%
+  left_join(puma.2020.mn[,c(5,6,8,9)], by = c("STATEFP" = "STATEFIP", "PUMA", "YEAR" = "year")) %>%
+  rename(PUMA.geometry = geometry)
+
+
+master.puma.migpuma.geo <- master.puma.2010.2021 %>%
+  rbind(master.puma.2022) %>%
+  mutate(metro.gm = ifelse(mn.geo != "Seven county metro", "Greater MN", "Seven county metro"))
+
+
+master.puma.geo.map <- ggplot(data = filter(master.puma.migpuma.geo, STATEFP == "027")) +
+  facet_wrap(~YEAR, ncol = 1) +
+  geom_sf_interactive(color = "grey85", aes(geometry = PUMA.geometry, fill = mn.geo, data_id = `PUMA NAME`, tooltip = paste(YEAR, "\nPUMA: ", PUMA, "\nPUMA Name: ", `PUMA NAME`, sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = brewer.pal(n = 6, "RdYlBu")) +
+  labs(title = "PUMA with MN geo category") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 18))
+
+master.migpuma.geo.map <- ggplot(data = filter(master.puma.migpuma.geo, STATEFP == "027")) +
+  facet_wrap(~YEAR, ncol = 1) +
+  geom_sf_interactive(color = "grey85", aes(geometry = MIGPUMA.geometry, fill = mn.geo, data_id = `PUMA NAME`, tooltip = paste(YEAR, "\nPUMA: ", PUMA, "\nPUMA Name: ", `PUMA NAME`, sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = brewer.pal(n = 6, "RdYlBu")) +
+  labs(title = "PUMA with MN geo category") +
+  theme(legend.position = "none",
+        text = element_text(size = 18))
+
+plot <- plot_grid(master.puma.geo.map, master.migpuma.geo.map)
+
+girafe(ggobj = plot, width_svg = 10, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))  
+```
+
+<br>
+
+The other way of breaking this down is to categorize the state into two categories;
+
+1.  Greater Minnesota (all regions not labeled seven county metro), and
+2.  Seven county metro.
+
+The maps below show what that looks like in correspondence with the new migration PUMAs. It does highlight that we can combine the 2022 data with the 2010 through 2021 data since they are the same areas.
+
+<br>
+
+```{r metro vs gm maps}
+master.puma.migpuma.geo.2010.map <- ggplot(data = filter(master.puma.migpuma.geo, STATEFP == "027")) +
+  facet_wrap(~YEAR, ncol = 2) +
+  geom_sf_interactive(color = "grey85", aes(geometry = MIGPUMA.geometry, fill = metro.gm, data_id = MIGPUMA, tooltip = paste(YEAR, "\n", metro.gm, "\n", MIGPUMA, sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = brewer.pal(n = 6, "RdYlBu")) +
+  labs(title = "Greater MN vs. Metro") +
+  theme(legend.box.margin = margin(50, 0, 0, -100),
+        text = element_text(size = 18))
+
+
+girafe(ggobj = master.puma.migpuma.geo.2010.map, width_svg = 10, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))  
+
+```
+
+<br>
+
+## Analysis - inflows and outflows {.tabset}
+
+The charts below provide the flows for each year starting in 2013.
+
+**Greater MN vs. Metro**
+
+What we see here is Greater MN experiencing an increasing inflow and a decreasing outflow by 2017, and then a reversal before 2020, and since the pandemic another turnaround with Greater Minnesota having an increasing inflow and decreasing outflow.
+
+In the seven county metro we see the opposite - they were having a larger inflow than outflow from 2013 to about 2017, and then it flipped and then the pandemic hit and there was a significant drop in inflows and a large increase in outflows.
+
+**Regional**
+
+-   Northwest: Northwest has been basically breaking even with a very modest net in migration since the early 2010s. There was a large drop in inflows in 2020 and 2021, but has recovered since that time.
+
+-   Northeast: Northeast was also seeing a modest net in migration since the early 2010s. By about 2018 there was a large drop in inflows followed by a large increase of outflows in 2020. Since the pandemic it has evened out again.
+
+-   Central:
+
+<br>
+
+### Greater MN vs Metro
+
+<br>
+
+```{r greater mn vs metro flows}
+id.puma.2010.2021 <- master.puma.migpuma.geo %>%
+  filter(YEAR == "2010-2021") %>%
+  filter(STATEFP == "027")
+
+id.migpuma.2010.2021 <- master.puma.migpuma.geo %>%
+  filter(YEAR == "2010-2021") %>%
+  filter(STATEFP == "027") %>%
+  distinct(MIGPUMA, .keep_all = TRUE)
+
+mn.inflows.2010.2021 <- ipums.original %>%
+  filter(STATEFIP == "027") %>%
+  filter(YEAR < 2022) %>%
+  mutate(PUMA = as.integer(PUMA),
+         PUMA = formatC(PUMA, width = 5, flag = "0"),
+         MIGPUMA1 = as.integer(MIGPUMA1),
+         MIGPUMA1 = formatC(MIGPUMA1, width = 5, flag = "0"))%>%
+  left_join(id.puma.2010.2021[,c(2,3,6,9)], by = c("STATEFIP" = "STATEFP", "PUMA")) %>%
+  rename(current.mn.geo = mn.geo,
+         current.metro.gm = metro.gm) %>%
+  left_join(id.migpuma.2010.2021[,c(2,4,6,9)], by = c("MIGPLAC1" = "STATEFP", "MIGPUMA1" = "MIGPUMA")) %>%
+  rename(left.mn.geo = mn.geo,
+         left.metro.gm = metro.gm) %>%
+  mutate(left.mn.geo = ifelse(is.na(left.mn.geo), "Out of state", as.character(left.mn.geo)),
+         left.metro.gm = ifelse(is.na(left.metro.gm), "Out of state", as.character(left.metro.gm)))
+  
+gm.metro.inflows.2010.2021 <- mn.inflows.2010.2021 %>%
+  filter(current.metro.gm != left.metro.gm) %>%
+  mutate(current.metro.gm = fct_relevel(current.metro.gm, "Greater MN", "Seven county metro")) %>%
+  group_by(YEAR, current.metro.gm) %>%
+  summarize(inflow = sum(PERWT)) %>%
+  ungroup()
+
+mn.outflows.2010.2021 <- ipums.original %>%
+  filter(MIGPLAC1 == "027") %>%
+  filter(YEAR < 2022) %>%
+  mutate(PUMA = as.integer(PUMA),
+         PUMA = formatC(PUMA, width = 5, flag = "0"),
+         MIGPUMA1 = as.integer(MIGPUMA1),
+         MIGPUMA1 = formatC(MIGPUMA1, width = 5, flag = "0")) %>%
+  left_join(id.migpuma.2010.2021[,c(2,4,6,9)], by = c("MIGPLAC1" = "STATEFP", "MIGPUMA1" = "MIGPUMA")) %>%
+  rename(left.mn.geo = mn.geo,
+         left.metro.gm = metro.gm) %>%
+  left_join(id.puma.2010.2021[,c(2,3,6,9)], by = c("STATEFIP" = "STATEFP", "PUMA" = "PUMA")) %>%
+  rename(current.mn.geo = mn.geo,
+         current.metro.gm = metro.gm) %>%
+  mutate(current.mn.geo = ifelse(is.na(current.mn.geo), "Out of state", as.character(current.mn.geo)),
+         current.metro.gm = ifelse(is.na(current.metro.gm), "Out of state", as.character(current.metro.gm)))
+  
+gm.metro.outflows.2010.2021 <- mn.outflows.2010.2021 %>%
+  filter(current.metro.gm != left.metro.gm) %>%
+  mutate(current.metro.gm = fct_relevel(current.metro.gm, "Greater MN", "Seven county metro")) %>%
+  group_by(YEAR, left.metro.gm) %>%
+  summarize(outflow = sum(PERWT)) %>%
+  ungroup()
+
+gm.metro.flows.2010.2021 <- gm.metro.inflows.2010.2021 %>%
+  left_join(gm.metro.outflows.2010.2021, by = c("YEAR", "current.metro.gm" = "left.metro.gm")) %>%
+  mutate(netflow = inflow - outflow) %>%
+  pivot_longer(names_to = "flow.type", values_to = "people", 3:5) %>%
+  rename(metro.gm = current.metro.gm) %>%
+  mutate(data_id = seq(n()))
+
+id.puma.2022 <- master.puma.migpuma.geo %>%
+  filter(YEAR == "2022") %>%
+  filter(STATEFP == "027")
+
+id.migpuma.2022 <- master.puma.migpuma.geo %>%
+  filter(YEAR == "2022") %>%
+  filter(STATEFP == "027") %>%
+  distinct(MIGPUMA, .keep_all = TRUE)
+
+mn.inflows.2022 <- ipums.original %>%
+  filter(STATEFIP == "027") %>%
+  filter(YEAR == 2022) %>%
+  mutate(PUMA = as.integer(PUMA),
+         PUMA = formatC(PUMA, width = 5, flag = "0"),
+         MIGPUMA1 = as.integer(MIGPUMA1),
+         MIGPUMA1 = formatC(MIGPUMA1, width = 5, flag = "0"))%>%
+  left_join(id.puma.2022[,c(2,3,6,9)], by = c("STATEFIP" = "STATEFP", "PUMA")) %>%
+  rename(current.mn.geo = mn.geo,
+         current.metro.gm = metro.gm) %>%
+  left_join(id.migpuma.2022[,c(2,4,6,9)], by = c("MIGPLAC1" = "STATEFP", "MIGPUMA1" = "MIGPUMA")) %>%
+  rename(left.mn.geo = mn.geo,
+         left.metro.gm = metro.gm) %>%
+  mutate(left.mn.geo = ifelse(is.na(left.mn.geo), "Out of state", as.character(left.mn.geo)),
+         left.metro.gm = ifelse(is.na(left.metro.gm), "Out of state", as.character(left.metro.gm)))
+  
+gm.metro.inflows.2022 <- mn.inflows.2022 %>%
+  filter(current.metro.gm != left.metro.gm) %>%
+  mutate(current.metro.gm = fct_relevel(current.metro.gm, "Greater MN", "Seven county metro")) %>%
+  group_by(YEAR, current.metro.gm) %>%
+  summarize(inflow = sum(PERWT)) %>%
+  ungroup()
+
+mn.outflows.2022 <- ipums.original %>%
+  filter(MIGPLAC1 == "027") %>%
+  filter(YEAR == 2022) %>%
+  mutate(PUMA = as.integer(PUMA),
+         PUMA = formatC(PUMA, width = 5, flag = "0"),
+         MIGPUMA1 = as.integer(MIGPUMA1),
+         MIGPUMA1 = formatC(MIGPUMA1, width = 5, flag = "0")) %>%
+  left_join(id.migpuma.2022[,c(2,4,6,9)], by = c("MIGPLAC1" = "STATEFP", "MIGPUMA1" = "MIGPUMA")) %>%
+  rename(left.mn.geo = mn.geo,
+         left.metro.gm = metro.gm) %>%
+  left_join(id.puma.2022[,c(2,3,6,9)], by = c("STATEFIP" = "STATEFP", "PUMA" = "PUMA")) %>%
+  rename(current.mn.geo = mn.geo,
+         current.metro.gm = metro.gm) %>%
+  mutate(current.mn.geo = ifelse(is.na(current.mn.geo), "Out of state", as.character(current.mn.geo)),
+         current.metro.gm = ifelse(is.na(current.metro.gm), "Out of state", as.character(current.metro.gm)))
+  
+gm.metro.outflows.2022 <- mn.outflows.2022 %>%
+  filter(current.metro.gm != left.metro.gm) %>%
+  mutate(current.metro.gm = fct_relevel(current.metro.gm, "Greater MN", "Seven county metro")) %>%
+  group_by(YEAR, left.metro.gm) %>%
+  summarize(outflow = sum(PERWT)) %>%
+  ungroup()
+
+gm.metro.flows.2022 <- gm.metro.inflows.2022 %>%
+  left_join(gm.metro.outflows.2022, by = c("YEAR", "current.metro.gm" = "left.metro.gm")) %>%
+  mutate(netflow = inflow - outflow) %>%
+  pivot_longer(names_to = "flow.type", values_to = "people", 3:5) %>%
+  rename(metro.gm = current.metro.gm) %>%
+  mutate(data_id = seq(n()))
+
+gm.metro.flows.2010.2022 <- gm.metro.flows.2010.2021 %>%
+  rbind(gm.metro.flows.2022) %>%
+  mutate(flow.type = ifelse(flow.type == "inflow", "Inflow",
+                            ifelse(flow.type == "outflow", "Outflow", "Net flow")),
+         flow.type = fct_relevel(flow.type, "Inflow", "Outflow", "Net flow"))
+
+gm.metro.flows.2010.2022.plot <- ggplot(gm.metro.flows.2010.2022, aes(YEAR, people, color = flow.type)) +
+  facet_wrap(~metro.gm, ncol = 2) +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_line(size = 3) +
+  geom_point_interactive(size = 2, aes(data_id = data_id, tooltip = paste(metro.gm, "\n", YEAR, "\nType of flow: ", flow.type, "\nNumber of people: ", comma(people), sep = ""))) +
+  geom_label_repel(data = filter(gm.metro.flows.2010.2022, YEAR == max(YEAR)), aes(label = paste(flow.type, "\n", comma(people), sep = "")), show.legend = FALSE) +
+  labs(x="", y = "", color="", title = "Flows of people")+
+  scale_y_continuous(labels=scales::comma)+
+  scale_x_continuous(breaks = seq(1900, 2050, 2),
+                     guide = guide_axis(n.dodge = 2)) +
+  theme_line+
+  scale_color_manual(values = c("#0571b0", "#ca0020", "black"),
+                     guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 18))
+
+girafe(ggobj = gm.metro.flows.2010.2022.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+```
+
+<br>
+
+### Greater MN Regions {.tabset}
+
+#### 2010-2021
+
+<br>
+
+```{r regional flows 2010 to 2021}
+
+regional.inflows.2010.2021 <- mn.inflows.2010.2021 %>%
+  filter(current.mn.geo != left.mn.geo) %>%
+  group_by(YEAR, current.mn.geo) %>%
+  summarize(inflow = sum(PERWT)) %>%
+  ungroup()
+
+regional.inflows.2022 <- mn.inflows.2022 %>%
+  filter(current.mn.geo != left.mn.geo) %>%
+  group_by(YEAR, current.mn.geo) %>%
+  summarize(inflow = sum(PERWT)) %>%
+  ungroup()
+
+regional.inflows.2010.2022 <- regional.inflows.2010.2021 %>%
+  rbind(regional.inflows.2022)
+
+regional.outflows.2010.2021 <- mn.outflows.2010.2021 %>%
+  filter(current.mn.geo != left.mn.geo) %>%
+  group_by(YEAR, left.mn.geo) %>%
+  summarize(outflow = sum(PERWT)) %>%
+  ungroup()
+
+regional.outflows.2022 <- mn.outflows.2022 %>%
+  filter(current.mn.geo != left.mn.geo) %>%
+  group_by(YEAR, left.mn.geo) %>%
+  summarize(outflow = sum(PERWT)) %>%
+  ungroup()
+
+regional.outflows.2010.2022 <- regional.outflows.2010.2021 %>%
+  rbind(regional.outflows.2022)
+
+regional.flows.2010.2022 <- regional.inflows.2010.2022 %>%
+  left_join(regional.outflows.2010.2022, by = c("YEAR", "current.mn.geo" = "left.mn.geo")) %>%
+  mutate(`Net flows` = inflow - outflow) %>%
+  rename(Inflows = inflow,
+         Outflows = outflow,
+         mn.geo = current.mn.geo) %>%
+  pivot_longer(names_to = "flow.type", values_to = "people", 3:5) %>%
+  mutate(data_id = seq(n()),
+         flow.type = fct_relevel(flow.type, "Inflows", "Outflows", "Net flows"))
+
+regional.flows.2010.2021.plot <- ggplot(data = filter(regional.flows.2010.2022, YEAR < 2022), aes(YEAR, people, color = flow.type)) +
+  facet_wrap(~mn.geo, ncol = 2, scales = "free_y") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_line(size = 3) +
+  geom_point_interactive(size = 2, aes(data_id = data_id, tooltip = paste(mn.geo, "\n", YEAR, "\nType of flow: ", flow.type, "\nNumber of people: ", comma(people), sep = ""))) +
+  labs(x="", y = "", color="", title = "Flows of people")+
+  scale_y_continuous(labels=scales::comma)+
+  scale_x_continuous(breaks = seq(1900, 2050, 2),
+                     guide = guide_axis(n.dodge = 2)) +
+  theme_line+
+  scale_color_manual(values = c("#0571b0", "#ca0020", "black"),
+                     guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 18))
+
+girafe(ggobj = regional.flows.2010.2021.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+
+```
+
+<br>
+
+#### 2022
+
+<br>
+
+```{r regional flows 2022}
+
+regional.flows.2022.plot <- ggplot(data = filter(regional.flows.2010.2022, YEAR == 2022), aes(mn.geo, people, fill = flow.type, group = flow.type)) +
+  geom_hline(yintercept = 0, color = "black") +
+    geom_col_interactive(position = "dodge", aes(data_id = data_id, tooltip = paste(mn.geo, "\n", YEAR, "\nType of flow: ", flow.type, "\nNumber of people: ", comma(people), sep = ""))) +
+  geom_label(aes(label = paste(flow.type, "\n", comma(people), sep = "")), show.legend = FALSE, color = "white", size = 2, position = position_dodge(width = .9)) +
+  labs(x="", y = "", color="", title = "Flows of people")+
+  scale_y_continuous(labels=scales::comma)+
+  theme_bar+
+  scale_fill_manual(values = c("#0571b0", "#ca0020", "black"),
+                     guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 18),
+        axis.text.x = element_text(angle = 25, hjust = .9))
+
+girafe(ggobj = regional.flows.2022.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+
+```
+
+<br>

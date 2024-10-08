@@ -1,0 +1,19 @@
+project:
+  type: website
+  output-dir: docs
+
+
+website:
+  title: "Rural MN Migration Trends"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Summary
+      - lit_review.qmd
+      - ipums_analysis.qmd
+
+format:
+  html:
+    theme: cosmo
+    css: styles.css
+    toc: true

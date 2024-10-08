@@ -1,0 +1,511 @@
+---
+title: "The narrative around migration trends"
+format: html
+editor: visual
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 4
+runtime: shiny
+resource_files:
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.cpg
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.dbf
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.prj
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.sbn
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.sbx
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.shp.xml
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.shx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(sf)
+library(ggrepel)
+library(scales)
+library(shiny)
+library(shinycssloaders)
+library(ggiraph)
+library(kableExtra)
+library(rmapshaper)
+library(cowplot)
+library(DT)
+library(htmlwidgets)
+library(RColorBrewer)
+library(readxl)
+library(janitor)
+library(lubridate)
+library(systemfonts)
+reset_font_cache()
+library(ggtext)
+library(readxl)
+library(zoo)
+```
+
+```{r loading jon docs and shapefiles, cache=TRUE, include=FALSE}
+theme_bar <- theme_bw() +
+  theme(panel.grid.major = element_line(color = "grey70", linewidth  = 0.1),
+        panel.grid.minor = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_text(face = "bold"),
+        panel.border = element_blank(),
+        legend.background = element_rect(fill = "transparent", color = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.key.size = unit(1, "lines"),
+        legend.margin = margin(0,0,0,0),
+        legend.title = element_blank(),
+        legend.text = element_text(margin = margin(l = 2)),
+        text = element_text(family = "Arial") ,
+        plot.title.position = "plot",
+        plot.title = element_text(face = "bold"))
+
+theme_line <- theme_bw() +
+  theme(legend.background = element_rect(fill = "transparent", color = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.text = element_text(margin = margin(l = 2)),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_line(color = "grey70", linewidth = 0.1),
+        axis.ticks = element_blank(),
+        axis.text = element_text(face = "bold"),
+        panel.border = element_blank(),
+        legend.margin = margin(0,0,0,0),
+        legend.key.size = unit(1, "lines"),
+        text = element_text(family = "Arial") ,
+        plot.title.position = "plot",
+        plot.title = element_text(face = "bold"))
+
+
+theme_sf <- theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_line(color = "white"),
+        panel.border = element_blank(),
+        legend.title = element_blank(),
+        legend.text = element_text(margin = margin(l = 2)),
+        legend.margin = margin(0,0,0,0),
+        legend.key.size = unit(1, "lines"),
+        text = element_text(family = "Arial") ,
+        plot.title.position = "plot",
+        plot.title = element_text(face = "bold"))
+
+regions <- read_csv("/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasche@ruralmn.org/My Drive/Data Prep/R Projects/Join docs/county_regions.csv") %>%
+    select(5,6) %>%
+    unique() %>%
+    mutate(edr = str_replace(edr, "  ", " "),
+           planning.region = str_replace(planning.region, " Minnesota", ""),
+           planning.region = fct_relevel(planning.region, "Northwest", "Northeast", "Central", "Seven County Mpls-St Paul", "Southwest", "Southeast"),
+           edr = fct_relevel(edr, "EDR 1 - Northwest", "EDR 2 - Headwaters", "EDR 3 - Arrowhead", "EDR 4 - West Central", "EDR 5 - North Central", "EDR 6E- Southwest Central", "EDR 6W- Upper Minnesota Valley", "EDR 7E- East Central", "EDR 7W- Central", "EDR 8 - Southwest", "EDR 9 - South Central", "EDR 10 - Southeast", "EDR 11 - 7 County Twin Cities", "Minnesota"))
+
+counties.regions <- read_csv("/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasche@ruralmn.org/My Drive/Data Prep/R Projects/Join docs/county_regions.csv") %>%
+  rename(mif = `MIF Region`) %>%
+  mutate(countyfp = formatC(countyfp, width = 3, flag = "0"),
+         Name = str_to_title(Name),
+         Name = str_replace(Name, "Q", "q"),
+         Name = str_replace(Name, "Of The", "of the"),
+         Name = str_replace(Name, "Mcleod", "McLeod"),
+         Dem_Desc = ifelse(Name == "Minnesota", "Minnesota", Dem_Desc) ,
+         edr = str_replace(edr, "  ", " "),
+         planning.region = str_replace(planning.region, " Minnesota", ""),
+         planning.region = fct_relevel(planning.region, "Northwest", "Northeast", "Central", "Seven County Mpls-St Paul", "Southwest", "Southeast"),
+         edr = fct_relevel(edr, "EDR 1 - Northwest", "EDR 2 - Headwaters", "EDR 3 - Arrowhead", "EDR 4 - West Central", "EDR 5 - North Central", "EDR 6E- Southwest Central", "EDR 6W- Upper Minnesota Valley", "EDR 7E- East Central", "EDR 7W- Central", "EDR 8 - Southwest", "EDR 9 - South Central", "EDR 10 - Southeast", "EDR 11 - 7 County Twin Cities", "Minnesota"),
+         mif = ifelse(is.na(mif), "TC", mif),
+         mif = as.factor(mif),
+         mif = fct_relevel(mif, "NW", "NE", "WC", "EC", "SW", "SE", "TC"))
+
+
+color.ruca <- c("Entirely rural" = "#009933", "Town/rural mix" = "#99CC33", "Urban/town/rural mix" = "#CC9966", "Entirely urban" = "#754C29", "Minnesota" = "black")
+
+color.pr <- c("Northwest" = 	"#4575b4", "Northeast" = "grey", "Central" = "#fee090", "Seven County Mpls-St Paul" = "#d73027", "Southwest" = "#91bfdb", "Southeast" = "#fc8d59", "Minnesota" = "black")
+
+color.edr <- c("EDR 1 - Northwest" = "#b3cde3", "EDR 2 - Headwaters" = "#8c96c6", "EDR 3 - Arrowhead" = "#fe9929", "EDR 4 - West Central" = "#8856a7", "EDR 5 - North Central" = "#810f7c", "EDR 6E- Southwest Central" = "#e5f5f9", "EDR 6W- Upper Minnesota Valley" = "#bdc9e1", "EDR 7E- East Central" = "#99d8c9", "EDR 7W- Central" = "#2ca25f", "EDR 8 - Southwest" = "#74a9cf", "EDR 9 - South Central" = "#0570b0", "EDR 10 - Southeast" = "#d7301f", "EDR 11 - 7 County Twin Cities" = "#d8b365", "Minnesota" = "black")
+
+color.pr.edr <- c ("Northwest" = "#4575b4","Northeast" = "#e0f3f8", "Central" = "#fee090", "Seven County Mpls-St Paul" = "#d73027", "Southwest" = "#91bfdb", "Southeast" = "#fc8d59", "Minnesota" = "black", "EDR 1 - Northwest" = "#b3cde3", "EDR 2 - Headwaters" = "#8c96c6", "EDR 3 - Arrowhead" = "#fe9929", "EDR 4 - West Central" = "#8856a7", "EDR 5 - North Central" = "#810f7c", "EDR 6E- Southwest Central" = "#e5f5f9", "EDR 6W- Upper Minnesota Valley" = "#bdc9e1", "EDR 7E- East Central" = "#99d8c9", "EDR 7W- Central" = "#2ca25f", "EDR 8 - Southwest" = "#74a9cf", "EDR 9 - South Central" = "#0570b0", "EDR 10 - Southeast" = "#d7301f", "EDR 11 - 7 County Twin Cities" = "#d8b365")
+
+mn_counties <- st_read("/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasche@ruralmn.org/My Drive/Data Prep/R Projects/Shapefiles/County shapefiles/MNCounties_MNDOT.shp", quiet = TRUE) %>%
+  ms_simplify(keep = .01, keep_shapes = TRUE) %>%
+  rename(countyfp = FIPS_CODE)
+
+```
+
+```{r import masters}
+master.comp.change <- read_csv("Data/Components of change/Master-comp-change-county.csv") %>%
+  mutate(Dem_Desc = fct_relevel(Dem_Desc, "Entirely rural", "Town/rural mix", "Urban/town/rural mix", "Entirely urban"),
+         edr = fct_relevel(edr, "EDR 1 - Northwest", "EDR 2 - Headwaters", "EDR 3 - Arrowhead", "EDR 4 - West Central", "EDR 5 - North Central", "EDR 6E- Southwest Central", "EDR 6W- Upper Minnesota Valley", "EDR 7E- East Central", "EDR 7W- Central", "EDR 8 - Southwest", "EDR 9 - South Central", "EDR 10 - Southeast", "EDR 11 - 7 County Twin Cities", "Minnesota"),
+         planning.region = fct_relevel(planning.region, "Northwest", "Northeast", "Central", "Seven County Mpls-St Paul", "Southwest", "Southeast"))
+
+master.icpsr <- read_xlsx("Data/ICPSR/Share of movers.xlsx")
+
+master.clev <- read_xlsx("Data/ICPSR/Urban_Migration_Estimates_Table A1_2024Q2.xlsx", skip = 3)
+
+master.migrant.dest <- read_xlsx("Data/ICPSR/Regional_Migration_Estimates_Table A2_2024Q2.xlsx")
+
+
+```
+
+<br>
+
+# Federal Reserve Bank Dashboard
+
+An article published by The Minnesota Star Tribune titled, [*New survey debunks myth about migration out of Minneapolis*](https://www.startribune.com/new-survey-debunks-myth-about-migration-out-of-minneapolis/601128917), highlights a new dashboard created by the Federal Reserve Bank of Minneapolis. The article points to the data as indicating "some people did move, but not at a rate exceeding what had been typical before the pandemic."
+
+## About the data
+
+*From the Federal Reserve of Minneapolis website*
+
+> "Data for the dashboard cover 2005 through 2023 and come from the [FRBNY Consumer Credit Panel/Equifax (CCP)](https://www.newyorkfed.org/research/staff_reports/sr479.html), a representative sample of all people in the United States who have a Social Security Number and a credit file."
+
+> "To define the geographic area the dashboard covers, we use the U.S. Census Bureau’s definition of the Minneapolis-St. Paul-Bloomington metropolitan statistical area (MSA). This includes 14 counties in Minnesota and two in Wisconsin. The CCP data are not available to the public; the Federal Reserve has access to them through a data-sharing agreement with Equifax, one of the three major credit reporting agencies in the United States."
+
+-   Strengths
+    -   More localized data (can show migration trends at census tract level).
+    -   More recency (published quarterly where as census and other data sources are usually a year behind.)
+-   Limitations
+    -   Underrepresents non-citizens, people under age 25, Black or Latino, and people with low incomes.
+
+## Points made in the article
+
+1.  "Some people did move, but not at a rate exceeding what had been typical before the pandemic."
+    -   I'm assuming the author means "some people did move "out of Minneapolis/metro"?"....
+    -   I'm assuming rate here means the number of mover's per x population (usually 100,000 people).
+2.  "There’s other evidence that refutes the mass exodus. Renters signed leases on 4,800 apartments in the first half of 2024 — the most in a decade."
+    -   Are these new rentals or just turnover? People moving around within the metro?
+    -   Also, this is 2024 data. The article is trying to refute out migration during and immediately after the pandemic. It could be that the metro is finally recovering. It could be that college campuses are finally back at full capacity after having a lot of options for online learnings.
+3.  "The Federal Reserve data shows that the majority of people — about 64% — who were living in Minneapolis in 2020 were still in the same place by 2023. That was just one percentage point lower than the share who stayed put between 2016 and 2019."
+    -   This is great data. I was actually bit surprised that it's only 64%. A lot of people move!
+    -   I think the fact that the percentage of folks that didn't move at all between 2020 and 2023 is nearly exactly that same as the percentage between 2016 and 2019 is really interesting.
+    -   However, one thing to note with this is that this severely underrepresents individuals 25 and under. Families usually move together. This means that it's worth checking to see if the type over movers changed at all. For example, what if the rate is the same, but the makeup of that rate is different - more families are moving rather than one-person households? The young kids would not be picked up in this data meaning it's underrepresenting this movement.
+4.  "Even Minneapolis residents who moved between 2020 and 2023 often didn’t go far. Of the people who did move, nearly 37% went to southwest Minneapolis or the Nokomis, Powderhorn or Northeast neighborhoods."
+    -   So there were `r percent(1-.64, accuracy = 1)` of folks that had a residence in Minneapolis between 2016 and 2019 and ended up moving to a different residence between 2020 and 2023. Of these folks, 37% of them only went to a different neighborhood.
+    -   Was this less or more than the previous three years?
+5.  "those with high scores — above 750 — were most likely to stay in the metro and least likely to move to Greater Minnesota"
+    -   Has this always been the case? And even if it's least likely, did the rate change?
+6.  "Among those living anywhere in the Twin Cities metro area, which is defined as a 16-county area, in 2020 just 1.8% left for Greater Minnesota by 2023, a number that is unchanged from the three-year period right before the pandemic"
+    -   This is interesting. However, did the number of people leaving increase? Because if so, that 1.8% is comparable to previous years. That's just a rate. 1.8% of 10 people vs. 100 people is a very different value.
+7.  "And while it takes more than a few extra numbers to break down years of misconceptions, Ellison said these findings matter to the people who have stayed in Minneapolis. “At minimum, it’s validating,” Ellison said. “And that matters to a city and to a population of people when there has been a considerable effort to demoralize us."
+    -   Welcome to our world in rural Minnesota.
+
+<br>
+
+## Points made in Federal Reserve Bank of Minneapolis Report
+
+First, the name of the article is ["Where are the Twin Cities area's movers moving to?"](https://www.minneapolisfed.org/article/2024/where-are-the-twin-cities-areas-movers-moving-to). This is much different than the Minnesota Star Tribune article.
+
+1.  "movement rates of the four credit score bands differ from one another, and also changed in different ways over time"
+
+    -   "Throughout each period, people with credit scores of 750 and above remained the least likely to move. During the pandemic period, the gap in migration rates between people with the highest credit scores and people with the lowest shrank considerably. Higher-credit-score people’s migration rate was stable compared to the rate in prior periods, while lower-credit-score people’s migration rate decreased substantially."
+
+2.  "Our data allow us to estimate that 7.6 percent of the MSA’s people with a credit score left the region from 2020 to 2023, compared to 7.3 percent from 2016 to 2019. Larger shares of residents moved out of their census tract but in most cases stayed within the MSA."
+
+3.  "During the same time period, the number of people with a credit score moving from the MSA’s two central cities increased slightly. About 19 percent of the people living in Minneapolis in 2016 had moved to a suburb or left the MSA by 2019. From 2020 to 2023, about 21 percent of Minneapolitans did the same. The equivalent numbers for St. Paul were 17 and 18 percent for each time period, respectively."
+
+4.  "Tracts with lower shares of White people generally saw more movement from 2020 to 2023."
+
+5.  "A related pattern is visible in Figure 3, which shows that places with relatively low median household incomes tend to have substantially higher out-migration rates than places with relatively high median household incomes."
+
+6.  "more than three-quarters of the movers from low-income tracts moved to tracts in higher-income categories, and nearly half of the movers from moderate-income tracts moved to middle- or high-income tracts. Overall, one-third of the people who moved from 2020 through 2023 landed in a census tract within a higher income bracket than the one they started in."
+
+Okay, so what the heck do we have here? The only data I have access to is the movers to different regions by credit score. And it's only the percentage of population, not actual numbers. So I will use that.
+
+Let's begin by looking at the percentage of the population within the MSA that move at all.
+
+The chart below shows that overall individuals with a credit score between 580 and 650 tend to have higher rates of moving across all time frames. In addition, when looking at it by timeframes, it's interesting that between 2016 and 2023, the percentage of individuals with the highest credit score saw a fairly significant increase in moving rates while the other credit scores saw a drop, particularly between 2020 and 2023.
+
+<br>
+
+```{r msa moving by credit score}
+
+msa.movers <- master.icpsr %>%
+  filter(time.frame != "2005-2011") %>%
+  select(credit.score, time.frame, non.movers) %>%
+  mutate(movers = 1 - non.movers,
+         credit.score = fct_relevel(credit.score, "Overall", "750+", "650-749", "580-649", "Less than 580"),
+         data_id = seq(n())) 
+
+msa.movers.plot <- ggplot(msa.movers, aes(credit.score, movers, fill = time.frame, group = time.frame)) +
+  geom_col_interactive(position = "dodge", aes(data_id = data_id, tooltip = paste(time.frame, "\nCredit score: ", credit.score, "\nPercent of MSA that moved: ", percent(movers, accuracy = .1), sep = ""))) +
+  geom_label(aes(y = movers / 2, label = percent(movers, accuracy = .1)), angle = 90, position = position_dodge(width = .9), show.legend = FALSE) +
+  labs(x="", y = "", color="", title = "Percent of MSA population that moved by credit score")+
+  scale_y_continuous(labels=scales::percent)+
+  scale_fill_manual(values = brewer.pal(n = 5, "PuBu")) +
+  theme_bar+
+  theme(legend.position = "bottom",
+        text = element_text(size = 16),
+        axis.text.x = element_text(angle = 25, hjust = .9))
+
+
+girafe(ggobj = msa.movers.plot, width_svg = 8, height_svg = 8) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))      
+
+```
+
+<br>
+
+Okay, so next is to determine where they are moving. The chart below provides the percentage of MSA population that moved to different destinations by credit score. We are going to break up the comparisons because in the original report they actually use two different origins - movers either began in the MSA, or in the seven county metro.
+
+**Origin: MSA**
+
+Overall, the highest rates of moving are individuals leaving the MSA for outside Minnesota. By 2023, 5.8% of this population left the MSA for another state compared to 3.4% that moved to another part of the MSA and 1.8% that moved to Greater MN.
+
+Across all destinations, the highest rates of moving tended to be among individuals with mid-quality credit scores - 580 to 749.
+
+When looking across time frames within each destination, it's interesting that both leaving MN, and leaving for Greater MN had increasing rates across all credit scores except for the very lowest. For example, individuals that left the MSA for Greater MN increased from 1.5% to 1.8%, however for the lowest credit score it decreased from 2.0% to 1.8%.
+
+<br>
+
+**Origin: Seven county metro**
+
+Overall, movers from the Seven county metro to another part of the Seven county metro are significantly higher than folks who leave the seven county metro for the greater MSA. For example, 2023, 16% of seven county metro dwellers moved to another part of the seven county metro, while only 1.2% moved outside of the seven county metro but within the MSA.
+
+Across all destinations, the highest rates of moving was within the credit scores of 580 to 749.
+
+When looking across time frames within each destination, it's interesting that the rate of individuals leaving the seven county metro to the greater MSA increased significantly across all credit scores except for the lowest. While the rate of individuals moving within the seven county metro has been decreasing across all credit scores.
+
+<br>
+
+## Origin: MSA
+
+**Left MN:** Overall, individuals with a credit score between 580 and 749 move at the highest rate. Over time, moving rates for all credit scores increased except fo the lowest.
+
+**MSA to MSA:** Again, the highest moving rates are individuals with credit scores between 580 and 749. Interestingly, the rates declined between 2020 - 2023 for all credit scores.
+
+**MSA to Greater MN:** The highest moving rates are individuals with a credit score between 580 and 749. Interestingly, the rates all increased overtime for all credit scores except for the lowest.
+
+<br>
+
+```{r msa moving where by credit score}
+msa.moving.destination <- master.icpsr %>% 
+  filter(time.frame != "2005-2011") %>% 
+  select(-non.movers) %>% 
+  rename(`Left MN` = left.mn, 
+         `MSA to Greater MN` = msa.gm, 
+         `MSA to MSA` = msa.msa, 
+         `Seven county to MSA` = seven.msa, 
+         `Seven county to Seven county` = seven.seven) %>% 
+  pivot_longer(names_to = "migration.type", values_to = "pct.msa", 3:7) %>% 
+  mutate(migration.type = fct_relevel(migration.type, "Seven county to Seven county", "Left MN", "MSA to MSA", "MSA to Greater MN", "Seven county to MSA"), 
+         credit.score = fct_relevel(credit.score, "Overall", "750+", "650-749", "580-649", "Less than 580"), 
+         data_id = seq(n())) 
+
+msa.moving.destination.plot <- ggplot(data = filter(msa.moving.destination, migration.type %in% c("Left MN", "MSA to MSA", "MSA to Greater MN")), aes(credit.score, pct.msa, fill = time.frame, group = time.frame)) + 
+  facet_wrap(~migration.type, ncol = 2, scales = "free_y") + 
+  geom_col_interactive(position = "dodge", aes(data_id = data_id, tooltip = paste(time.frame, "\nMigration type: ", migration.type, "\nPercent of MSA population: ", percent(pct.msa, accuracy = .1), sep = ""))) + 
+  geom_label(aes(y = pct.msa / 2, label = percent(pct.msa, accuracy = .1)), angle = 90, show.legend = FALSE, position = position_dodge(width = .9)) + 
+  labs(x="", y = "", color="", title = "Percent of MSA migrating to destination by credit score")+ 
+  scale_y_continuous(labels=scales::percent)+ 
+  theme_bar+ 
+  scale_fill_manual(values = brewer.pal(n = 6, "PuBu"), guide = guide_legend(ncol = 3)) + 
+  theme(legend.position = "bottom", text = element_text(size = 18), axis.text.x = element_text(angle = 25, hjust = .9)) 
+
+girafe(ggobj = msa.moving.destination.plot, width_svg = 8, height_svg = 8) %>% girafe_options(opts_selection(type = "none"), opts_sizing(rescale = FALSE))
+
+```
+
+<br>
+
+## Origin: Seven county metro
+
+**Seven county to Seven county:** The highest moving rates are individuals with credit scores between 580 and 650. All rates decreased from 2020 to 2023 across all credit scores.
+
+**Seven county to greater MSA:** The highest moving rates are again, individuals with credit scores between 580 and 650. Rates across all credit scores have actually incrased since 2016 except for the lowest credit scores.
+
+<br>
+
+```{r seven county moving where by credit score}
+seven.moving.destination <- master.icpsr %>% 
+  filter(time.frame != "2005-2011") %>% 
+  select(-non.movers) %>% 
+  rename(`Left MN` = left.mn, 
+         `MSA to Greater MN` = msa.gm, 
+         `MSA to MSA` = msa.msa, 
+         `Seven county to greater MSA` = seven.msa, 
+         `Seven county to Seven county` = seven.seven) %>% 
+  pivot_longer(names_to = "migration.type", values_to = "pct.msa", 3:7) %>% 
+  mutate(migration.type = fct_relevel(migration.type, "Seven county to Seven county", "Left MN", "MSA to MSA", "MSA to Greater MN", "Seven county to greater MSA"), 
+         credit.score = fct_relevel(credit.score, "Overall", "750+", "650-749", "580-649", "Less than 580"), 
+         data_id = seq(n())) 
+
+seven.moving.destination.plot <- ggplot(data = filter(seven.moving.destination, migration.type %in% c("Seven county to Seven county", "Seven county to greater MSA")), aes(credit.score, pct.msa, fill = time.frame, group = time.frame)) + 
+  facet_wrap(~migration.type, ncol = 2, scales = "free_y") + 
+  geom_col_interactive(position = "dodge", aes(data_id = data_id, tooltip = paste(time.frame, "\nMigration type: ", migration.type, "\nPercent of MSA population: ", percent(pct.msa, accuracy = .1), sep = ""))) + 
+  geom_label(aes(y = pct.msa / 2, label = percent(pct.msa, accuracy = .1)), angle = 90, show.legend = FALSE, position = position_dodge(width = .9)) + 
+  labs(x="", y = "", color="", title = "Percent of Seven county metro migrating to destination by credit score")+ 
+  scale_y_continuous(labels=scales::percent)+ 
+  theme_bar+ 
+  scale_fill_manual(values = brewer.pal(n = 6, "PuBu"), guide = guide_legend(ncol = 3)) + 
+  theme(legend.position = "bottom", text = element_text(size = 18), axis.text.x = element_text(angle = 25, hjust = .9)) 
+
+girafe(ggobj = seven.moving.destination.plot, width_svg = 8, height_svg = 8) %>% girafe_options(opts_selection(type = "none"), opts_sizing(rescale = FALSE))
+
+```
+
+<br>
+
+# Federal Reserve Bank of Cleveland: Did the COVID-19 Pandemic Cause an Urban Exodus?
+
+Stephan Whitaker from the Federal Reserve Bank of Cleveland has been following migration trends for a while using the same data source as the Federal Reserve Bank of Minneapolis. His most recent report, ["Did the COVID-19 Pandemic Cause an Urban Exodus?"](https://www.clevelandfed.org/publications/cleveland-fed-district-data-brief/cfddb-20210205-did-the-covid-19-pandemic-cause-an-urban-exodus), examined in-flows and out-flows of residents within major cities. His analysis provides a different view on the migration patterns;
+
+> “In this data brief, I use the Federal Reserve Bank of New York/Equifax Consumer Credit Panel (CCP) and find that migration flows were in fact very unfavorable for urban neighborhoods in 2020. However, people’s taking flight from urban areas is only part of the story.” (Whitaker, 2021, p. 1)
+
+In his analysis, he defines urban areas as;
+
+> urban neighborhoods as census tracts in metro areas with populations of more than 500,000 that have either a population density of more than 7,000 people per square mile or the majority of their housing stock built before World War II (WWII).4” (Whitaker, 2021, p. 2)
+
+His thinking for including neighborhoods built before WWII were designed for pedestrians so everything is within walking distance.
+
+## Points made in article
+
+1.  “As measured by net migration to and from urban neighborhoods, 2020 does appear to have seen an urban exodus relative to the migration flows during the preceding 10 years (Figure 1).” (Whitaker, 2021, p. 2)
+2.  “The net flow of people out of US urban neighborhoods averaged nearly 28,000 people per month in March through September of the recent years 2017 to 2019. That number about doubled—to 56,000 people per month—in 2020 after the pandemic’s onset in March.”
+3.  “Figure 2 shows that the decline of in-migration is actually the larger driver. The average of monthly out-migration was 276,000 in March through September 2020. This is 10,000 more than its average of 266,000 for the same months in 2017 through 2019. The larger change was for in-migration, which fell 18,000—from an average of 238,000 in 2017 to 2019—to 220,000 in 2020.” (Whitaker, 2021, p. 4)
+4.  “In most years, the net flows out of below-median-income neighborhoods are larger than the net flows out of above-median-income urban neighborhoods, but this pattern reversed in 2020. The net outflow of people who are purchasing a home at their destination neighborhood increased 62 percent, but the net outflow of those renting at their destination increased by 210 percent.” (Whitaker, 2021, p. 5)
+5.  “By age category, young adults exhibited the largest increase in net outflows. The most populous metro areas, those with more than 5 million residents, saw larger increases in net outflows than did smaller metro areas” (Whitaker, 2021, p. 5)
+6.  “Net out-migration was greater for metro areas that had more deaths from COVID-19 and those with more telework-capable occupations. Metro areas that had more small businesses remain open experienced less net out-migration. The increases in homicides in the metro area’s central city was not associated with increased net outmigration.” (Whitaker, 2021, p. 6)
+7.  Cities that experienced significant protests following the murder of George Floyd saw out-migration estimates that were twice as high as the average during the preceding three years. (Whitaker, p. 7)
+8.  "The estimates presented here strongly suggest that migration flows were unfavorable for urban neighborhoods during 2020. However, the word “exodus” emphasizes that migrants are leaving a particular area in large numbers. If we look at the gross flows underlying the trends in Figures 3 through 6 (available in the appendix), we can see that the declines of in-migration are almost always greater than the increases in out-migration.” (Whitaker, 2021, p. 8)
+9.  “What is certain is that hundreds of thousands of people who would have moved into an urban neighborhood in a typical year were unwilling or unable to do so in 2020.” (Whitaker, 2021, p. 8)
+
+The big takeaway here is that it's not necessarily about people "leaving", but rather, a combination of fewer people moving into the twin cities while also a slight increase in the people moving out of the twin cities. This makes me think that if the out-flow migration was about the same as the previous years before the pandemic, it's largely the lack of in-flow that impact the total net migration numbers in Hennepin and St. Paul. As Stephan Whitaker puts it;
+
+> “What is certain is that hundreds of thousands of people who would have moved into an urban neighborhood in a typical year were unwilling or unable to do so in 2020.” (Whitaker, 2021, p. 8)
+
+<br>
+
+## Updated numbers
+
+Since this report in 2021, they have published updated numbers on the in-flows and out-flows of metropolitan areas.
+
+1.  “In 2024:Q1, net outflows of migrants from urban neighborhoods, as measured by a four-quarter moving average, rose for the first time since mid-2021 (Figure 1), increasing from 113,800 to 116,900 per quarter.” (Whitaker, 2021, p. 1)
+2.  “Net outflows accelerated in 8 of the 10 most populous urban centers, with notable increases in the San Francisco and Miami metro areas (Figure 2).” (Whitaker, 2021, p. 1)
+3.  “A dozen metro areas have recently seen net urban migration above their prepandemic (2010–2019) trend lines.” (Whitaker, 2021, p. 1)
+
+So, let's see how Minneapolis is faring.
+
+In the following charts, Minneapolis is defined as the Census Statistical Area - 19 counties along with 2 Wisconsin counties.
+
+The chart below is the four quarter moving average of net migration for the Minneapolis CSA. The black line is the actual values of average migration, the blue line is the trend line from before the pandemic (before 2020-01-01) and the green line is the "recovery" line which starts on 2020-04-01. Before the pandemic, the trend line for the region was actually towards a net out-migration. When the pandemic hit there was actually a significant loss in net migration and since that time there's been a recovery to their former trend line.
+
+<br>
+
+```{r prep cleveland data}
+cleve.minneapolis.data <- master.clev %>%
+  select(Year, Quarter, Minneapolis) %>%
+  mutate(year.quarter = paste(Year, "Q", Quarter, sep = ""),
+         year.quarter = as.Date(as.yearqtr(year.quarter)),
+         Minneapolis = Minneapolis * 1000,
+         Minneapolis.mean = (Minneapolis + lag(Minneapolis, 1) + lag(Minneapolis, 2) + lag(Minneapolis, 3)) / 4,
+         data_id = seq(n()))
+
+cleve.minneapolis.data.plot <- ggplot(cleve.minneapolis.data, aes(year.quarter, Minneapolis)) +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_line(size = 2) +
+  geom_vline(xintercept = as.Date("2020-04-01"), color = "red", size = 2) +
+  geom_smooth(data = filter(cleve.minneapolis.data, year.quarter < "2021-01-01"), method = "lm", se = FALSE) +
+  geom_smooth(data = filter(cleve.minneapolis.data, year.quarter > "2021-01-01"), method = "lm", se = FALSE, color = "#006d2c") +
+  geom_point_interactive(size = 1.5, aes(data_id = data_id, tooltip = paste("Year: ", Year, "\nQuarter: ", Quarter, "\nMigration from MSA: ", comma(Minneapolis), sep = ""))) +
+  labs(x="", y = "", color="", title = "Net migration of Minneapolist-St.Paul-Blooming CSA")+
+  scale_y_continuous(labels=scales::comma)+
+  theme_line+
+  theme(legend.position = "none")
+
+
+girafe(ggobj = cleve.minneapolis.data.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+```
+
+<br>
+
+Now, it's important to remember that net migration is the sum of two different, opposing actions - people coming in minus the people that are leaving. It could be that one of these has changed more significantly than the other, such as very few people moving into the MSA while the number of people leaving has remained unchanged.
+
+And in fact, the author points this out in his 2021 article;
+
+> An increase in the net out-migration from urban neighborhoods can be driven either by an increase in people moving out or by a decrease in people moving in. Figure 2 shows that the decline of in-migration is actually the larger driver. The average of monthly out-migration was 276,000 in March through September 2020. This is 10,000 more than its average of 266,000 for the same months in 2017 through 2019. The larger change was for in-migration, which fell 18,000—from an average of 238,000 in 2017 to 2019—to 220,000 in 2020 (Whitaker, 2021)
+
+<br>
+
+![Source: Federal Reserve Bank of New York/Equifax Consumer Credit Panel, American Community Survey, and author's calculations.](Lit/etimated%20gross%20migration%20into%20and%20from%20urban%20neighborhoods.png)
+
+<br>
+
+The following numbers represent the change in gross and net outflows from the Minneapolis-St.Paul-Bloomington CSA. The change is calculated as the difference between the flow in April to September 2020 from the average from the same months in 2017, 2018, and 2019.
+
+Change in Outflow: 9,000 migrants per month more than average leaving the metro
+
+Change in Inflow: -25,000 migrants per month more than average coming into the metro
+
+There are two points to made here.
+
+First, there were signficant differences in both the inflows and outflows of migration in the Twin Cities metro CSA - there were 9,000 more people per month migrating out of the Twin Cities CSA compared to the 2017, 2018, and 2019 average. In addition, there were 25,000 LESS people per month migrating into the Twin Cities CSA compared to 2017, 2018, and 2019.
+
+Second, the larger driver of the total net migration was actually that there were far LESS people moving into the Twin Cities Metro CSA.
+
+Here is the chart provided for the Twin Cities CSA that was in the report.
+
+![](Lit/estimated%20gross%20and%20net%20migration%20into%20and%20out%20of%20minneapolis.png)
+
+<br>
+
+# Federal Reserve Bank of Cleveland: Urban and Regional Estimates: Will Your City Recover from the Pandemic?
+
+Another report from Stephan Whitaker published in 2023, [*Urban and Regional Migration Estimates: Will Your City Recover from the Pandemic*](https://www.clevelandfed.org/publications/cleveland-fed-district-data-brief/2023/cfddb-20230803-urban-and-regional-migration-estimates), provides updated numbers on his previous analysis, while also including analysis on where migrants are moving to when leaving metro areas.
+
+Four categories are developed for the distinations of migrants that are leaving urban neighborhoods within major metropolican CSA's.
+
+-   High-cost large metro areas: contains 12 metro areas that have housing costs far above the rest of hte country and populations of at least 2 million (think NYC)
+
+-   Affordable, large metro areas: metro areas that have populations of more than 2 million and housing prices of less than \$200 per square foot.
+
+-   Midsize metro areas: metro areas that have populations between 500,000 and 2 million
+
+-   Small metro and rural areas: metro areas with fewer than 500,000 and rural areas.
+
+The chart on the left provides the overall four-quarter moving average of quarterly net migration for the Minneapolis-St. Paul-Bloomington CSA. The chart on the right provides the net exchange in domestic migration occurring between the metro area and the four types of region in the entire country.
+
+```{r migrant exchange among twin cities CSA and other regions}
+girafe(ggobj = cleve.minneapolis.data.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+minneapolis.migrant.dest <- master.migrant.dest %>%
+  select(Year, Quarter, Minneapolis, 64, 65, 66) %>%
+  rename(high.cost.large = 3,
+         affordable.large = 4,
+         midsize = 5,
+         small.rural = 6) %>%
+  slice(2:59) %>%
+  pivot_longer(names_to = "dest.type", values_to = "n.migrants", high.cost.large:small.rural) %>%
+  mutate(n.migrants = as.numeric(n.migrants),
+         n.migrants = n.migrants*1000,
+         year.quarter = paste(Year, "Q", Quarter, sep = ""),
+         year.quarter = as.Date(as.yearqtr(year.quarter)),
+         data_id = seq(n()))
+
+minneapolis.migrant.dest.plot <- ggplot(minneapolis.migrant.dest, aes(year.quarter, n.migrants, color = dest.type)) +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_smooth(se = FALSE, size = 2) +
+  geom_point_interactive(size = 1.5, aes(data_id = data_id, tooltip = paste(year.quarter, "\nDestination of migrant: ", dest.type, "\nNumber of migrants this quarter: ", comma(n.migrants), sep = ""))) +
+  labs(x="", y = "", color="", title = "Domestic migrant exchange within Minneapolis-St. Paul-Bloomington MSA")+
+  scale_y_continuous(labels=scales::comma)+
+  theme_line+
+  scale_color_manual(values= brewer.pal(n = 6, "RdYlBu"),
+                     guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom")
+
+girafe(ggobj = minneapolis.migrant.dest.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+
+
+```
+
+<br>
+
