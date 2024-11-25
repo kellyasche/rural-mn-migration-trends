@@ -229,7 +229,7 @@ We will explore net migration by the following geographies and county types;
 
 ## Change in net migration {.tabset}
 
-Below are the......
+Below are the annual net migration numbers using this data. Interestingly, it shows that Minnesota as a whole has experienced a net out-migration every year. When breaking it down, this continues to be the case for every region and RUCA group. However, the out-migration lessened for more rural areas during the pandemic compared to more urban areas.
 
 <br>
 
