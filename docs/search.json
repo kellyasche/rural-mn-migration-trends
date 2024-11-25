@@ -88,7 +88,21 @@
     "href": "USPS_change_of_address.html#the-data",
     "title": "USPS Change of Address data",
     "section": "The data",
-    "text": "The data\nBelow is the dataset showing only Minensota counties.\n\n\n\n\n\n\n\n\nThe dataset has 6,264 rows. The first date we have data for is April 2017 and the last is March 2023.\nHere is the data dictionary."
+    "text": "The data\nBelow is the dataset showing only Minensota counties.\n\n\n\n\n\n\n\n\nThe dataset has 6,264 rows. The first date we have data for is April 2017 and the last is March 2023.\nHere is the data dictionary.\n\n\n\n\n\n\n\n\nThe most useful data here will be the in-, out-, and net-migration rates because we will be able to compare the impacts across rural and urban without sheer population size of urban areas dwarfing all other geographies.\nThe authors calculated the rate using the following formula (I’ll use the net migration for the example);\n\n(NetMig_countyYYYYMM_IMP / PopbyMonth) * 10,000\n\nIn this formula, each value is defined as;\n\nNetMig_countyYYYYMM_IMP = InMig_countyYYYYMM_IMP - OutMig_countyYYYYMM_IMP\n\nEach of these are calculated using the U.S. Postal Service by-month change-of-address zip code data. The computational means have already been calculated for missing/suppressed data.\n\nPopbyMonth = Population data from U.S. Census Bureau Population Estimates Program. This data is for July 1 for each calendar year. The authors use this value for their July inputs, and than use linear interpolation to estimate the August - June populations. For the monthly estimates following July 2022, the authors used each county’s median rate of annual population change from 2017 to 2022."
+  },
+  {
+    "objectID": "USPS_change_of_address.html#change-in-net-migration",
+    "href": "USPS_change_of_address.html#change-in-net-migration",
+    "title": "USPS Change of Address data",
+    "section": "Change in net migration",
+    "text": "Change in net migration\nBelow are the……\n\n\nMinnesota\n\n\n\n\n\n\n\n\n\n\nPlanning Region\n\n\n\n\n\n\n\n\n\n\nRUCA\nOut of all the charts this one most clearly shows that rural areas tended to do better during the pandemic."
+  },
+  {
+    "objectID": "USPS_change_of_address.html#change-in-net-migration-before-and-after-pandemic",
+    "href": "USPS_change_of_address.html#change-in-net-migration-before-and-after-pandemic",
+    "title": "USPS Change of Address data",
+    "section": "Change in net migration before and after pandemic",
+    "text": "Change in net migration before and after pandemic\nLet’s copy the report’s analysis which compared migration rates grouped together in years before and after the pandemic.\nWe will group the years together by the following;\n\nGroup 1 = April 2017 - March 2020\nGroup 2 = April 2020 - March 2023\n\n\n\nMinnesota\n\n\n\n\n\n\n\n\n\n\nPlanning Region\n\n\n\n\n\n\n\n\n\n\nRUCA"
   },
   {
     "objectID": "Data/IPUMS/Description of analysis.html",
