@@ -220,7 +220,6 @@ We will explore net migration by the following geographies and county types;
 
 -   Minnesota
 -   Planning Region
--   EDR
 -   County
 -   RUCA
 -   REC_2015
@@ -332,6 +331,78 @@ girafe(ggobj = net.mig.pr.plot, width_svg = 7, height_svg = 7) %>%
 
 <br>
 
+### EDR
+
+As we get into smaller geographies, we begin to see some interesting patterns. 
+
+**Northwest**
+All EDRs saw significant improvement from their net out migration in 2017. EDR 5 actually experienced a net in-migration for a few years before falling back to net out-migration.
+
+**Northeast**
+The arrowhead has seen improvement in their net out-migration during and after their pandemic.
+
+**Central**
+There is improvement among all EDRs in their net-out migration numbers. EDR 7E actually experienced a net in-migration during the pandemic and continues to be breaking even.
+
+**Seven County Metro** The seven county metro continues a slide in their net out-migration with slight improvement over the last few years.
+
+**Southwest**
+Southwest hasn't seen a whole love of change except for EDR 9 which experienced a huge drop off.
+
+**Southeast**
+A bit of a roller coaster for Southeast with big improvement in out-migration followed by a steep worsening. In the last year they are right back where they started.
+
+
+<br>
+
+```{r net migration edr}
+net.mig.edr <- master.usps %>% 
+  group_by(PanYEAR, edr, planning.region) %>% 
+  summarize(in.mig = sum(InMig_countyYYYYMM_IMP),
+            out.mig = sum(OutMig_countyYYYYMM_IMP), 
+            net.mig = sum(NetMig_countyYYYYMM_IMP), 
+            pop = sum(PopbyMonth[MONTH==7])) %>%
+  ungroup() %>%
+mutate(in.mig.rate = (in.mig / pop) * 10000,
+       out.mig.rate = (out.mig / pop) * 10000,
+       net.mig.rate = (net.mig / pop) * 10000,
+       year = ifelse(PanYEAR == 1, "2017-2018",
+                     ifelse(PanYEAR == 2, "2018-2019",
+                            ifelse(PanYEAR == 3, "2019-2020",
+                                   ifelse(PanYEAR == 4, "2020-2021",
+                                          ifelse(PanYEAR == 5, "2021-2022", "2022-2023"))))),
+       year = as.factor(year),
+       data_id = seq(n()))
+
+net.mig.edr.plot <- ggplot(net.mig.edr, aes(PanYEAR, net.mig.rate, color = edr)) +
+  facet_wrap(~planning.region, ncol = 2, scales = "free_y") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_smooth(se = FALSE, size = 3) +
+  geom_point_interactive(size = 2,aes(data_id = data_id, tooltip = paste(edr, "\nYear: ", PanYEAR, "\nIn-migration = ", comma(in.mig), "\nOut-migration: ", comma(out.mig), "\nNet-migration: ", comma(net.mig), "\nPopulation: ", comma(pop), "\nIn-migration rate: ", comma(in.mig.rate, accuracy = .1), "\nOut-migration rate: ", comma(out.mig.rate, accuracy = .1), "\nNet-migration rate: ", comma(net.mig.rate, accuracy = .1), sep = ""))) +
+  labs(x="", 
+       y = "Net migration per 10,000 people", 
+       color="", 
+       title = "Net migration rate",
+       subtitle = "Except for Southwest, all rural regions experienced an uptick in their migration patterns, but all are returning to normal.") + 
+  scale_y_continuous(labels=scales::comma) +
+  scale_x_continuous(breaks = c(1,2,3,4,5,6),
+                     labels = c("2017-2018", "2018-2019", "2019-2020", "2020-2021", "2021-2022", "2022-2023")) +
+  scale_color_manual(values = color.edr,
+                     guide = guide_legend(ncol = 3)) +
+  theme_line +
+  theme(legend.position = "bottom",
+        text = element_text(size = 14),
+        axis.text.x = element_text(angle = 25, hjust = .9))
+
+girafe(ggobj = net.mig.edr.plot, width_svg = 7, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+```
+
+<br>
+
+
 ### RUCA
 
 Out of all the charts this one most clearly shows that rural areas tended to do better during the pandemic.
@@ -383,19 +454,69 @@ girafe(ggobj = net.mig.ruca.plot, width_svg = 7, height_svg = 7) %>%
 
 <br>
 
-## Change in net migration before and after pandemic{.tabset}
+### Recreation Type
+
+Recreational counties experienced a significently improved out migration rate during the pandemic but the trendline is going towards pre-pandemic levels again.
+
+<br>
+
+```{r net migration rec}
+net.mig.rec <- master.usps %>% 
+  group_by(PanYEAR, REC_2015) %>% 
+  summarize(in.mig = sum(InMig_countyYYYYMM_IMP),
+            out.mig = sum(OutMig_countyYYYYMM_IMP), 
+            net.mig = sum(NetMig_countyYYYYMM_IMP), 
+            pop = sum(PopbyMonth[MONTH==7])) %>%
+  ungroup() %>%
+mutate(in.mig.rate = (in.mig / pop) * 10000,
+       out.mig.rate = (out.mig / pop) * 10000,
+       net.mig.rate = (net.mig / pop) * 10000,
+       year = ifelse(PanYEAR == 1, "2017-2018",
+                     ifelse(PanYEAR == 2, "2018-2019",
+                            ifelse(PanYEAR == 3, "2019-2020",
+                                   ifelse(PanYEAR == 4, "2020-2021",
+                                          ifelse(PanYEAR == 5, "2021-2022", "2022-2023"))))),
+       year = as.factor(year),
+       data_id = seq(n()),
+       REC_2015 = ifelse(REC_2015 == 1, "Recreational", "Not recreational"),
+       REC_2015 = fct_relevel(REC_2015, "Recreational", "Not recreational"))
+
+net.mig.rec.plot <- ggplot(net.mig.rec, aes(PanYEAR, net.mig.rate, color = REC_2015)) + 
+  geom_hline(yintercept = 0, color = "black") +
+  geom_smooth(se = FALSE, size = 3) +
+  geom_point_interactive(size = 2,aes(data_id = data_id, tooltip = paste(REC_2015, "\nYear: ", PanYEAR, "\nIn-migration = ", comma(in.mig), "\nOut-migration: ", comma(out.mig), "\nNet-migration: ", comma(net.mig), "\nPopulation: ", comma(pop), "\nIn-migration rate: ", comma(in.mig.rate, accuracy = .1), "\nOut-migration rate: ", comma(out.mig.rate, accuracy = .1), "\nNet-migration rate: ", comma(net.mig.rate, accuracy = .1), sep = ""))) +
+  labs(x="", 
+       y = "Net migration per 10,000 people", 
+       color="", 
+       title = "Net migration rate",
+       subtitle = "Huge improvement in out migration for recreational counties.") + 
+  scale_y_continuous(labels=scales::comma) +
+  scale_x_continuous(breaks = c(1,2,3,4,5,6),
+                     labels = c("2017-2018", "2018-2019", "2019-2020", "2020-2021", "2021-2022", "2022-2023")) +
+  scale_color_manual(values = brewer.pal(n = 5, "RdYlBu")) +
+  theme_line +
+  theme(legend.position = "bottom",
+        text = element_text(size = 14),
+        axis.text.x = element_text(angle = 25, hjust = .9))
+
+girafe(ggobj = net.mig.rec.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+```
+
+<br>
+
+## Change in net migration before and after pandemic {.tabset}
 
 Let's copy the report's analysis which compared migration rates grouped together in years before and after the pandemic.
 
 We will group the years together by the following;
 
-* Group 1 = April 2017 - March 2020
-* Group 2 = April 2020 - March 2023
-
-
+-   Group 1 = April 2017 - March 2020
+-   Group 2 = April 2020 - March 2023
 
 <br>
-
 
 ### Minnesota
 
@@ -539,5 +660,3 @@ girafe(ggobj = before.after.pan.mig.rates.ruca.plot, width_svg = 7, height_svg =
 ```
 
 <br>
-
-

@@ -4,4 +4,19 @@ format: html
 editor: visual
 ---
 
-## Summary at some point.
+## Definitions
+
+**Recreational counties**
+
+First, Nonmetro counties need to be identified. This is done by identifying counties outside of the individual metro areas defined by the Office of Management and Budget. In general, a metro area contains an urbanized area of 50,000 or more people, with borders extended out to county lines and including any other counties linked by substantial job commuting to the central county or counties. All other counties are nonmetro.
+
+Next, a multistep selection procedure combining several empirical measures of recreational activity with a careful review of contextual material was used to identify recreation counties. These measures were:
+
+1.  wage and salary employment in entertainment and recreation, accommodations, eating and drinking places, and real estate as a percentage of all employment reported in the Census Bureau’s County Business Patterns for;
+2.  percentage of total personal income reported for these same categories by the Bureau of Economic Analysis;
+3.  percentage of housing units intended for seasonal or occasional use reported in the Census; and
+4.  per capita receipts from motels and hotels as reported in the Census of Business.
+
+The three variables measuring employment, income, and seasonal housing were converted to z-scores and combined into a weighted index (weights of 0.3 were assigned to income and employment and 0.4 to seasonal housing) to reflect recreational activity. Counties with index scores of 0.67 or higher were regarded as potential recreation counties. Additional counties were considered to be recreation counties if their value was greater than 0 (the mean of the index) and they had at least \$400 per capita of hotel-motel receipts.
+
+Counties were also accepted if at least 25 percent of their housing was seasonal, so long as the index exceeded the mean. Each potential candidate was individually appraised from printed and/or Internet sources and personal knowledge to determine or verify the nature of their recreational function. Fourteen counties that ostensibly qualified, but lacked any known recreational function, were deleted from the list either because they were very small in population with inadequate and misleading County Business Patterns coverage or because they reflected high travel activity without recreational purpose, i.e., overnight motel and eating place clusters on major highways.
