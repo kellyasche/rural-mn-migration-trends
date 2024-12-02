@@ -116,7 +116,14 @@
     "href": "USPS_change_of_address.html#change-in-net-migration-before-and-after-pandemic",
     "title": "USPS Change of Address data",
     "section": "Change in net migration before and after pandemic",
-    "text": "Change in net migration before and after pandemic\nLet’s copy the report’s analysis which compared migration rates grouped together in years before and after the pandemic.\nWe will group the years together by the following;\n\nGroup 1 = April 2017 - March 2020\nGroup 2 = April 2020 - March 2023\n\n\n\nMinnesota\n\n\n\n\n\n\n\n\n\n\nPlanning Region\n\n\n\n\n\n\n\n\n\n\nRUCA"
+    "text": "Change in net migration before and after pandemic\nLet’s copy the report’s analysis which compared migration rates grouped together in years before and after the pandemic.\nWe will group the years together by the following;\n\nGroup 1 = April 2017 - March 2020\nGroup 2 = April 2020 - March 2023\n\n\n\nMinnesota\n\n\n\n\n\n\n\n\n\n\nPlanning Region\n\n\n\n\n\n\n\n\n\n\nRUCA\n\n\n\n\n\n\n\n\n\n\nRecreation type\nRecreational counties has significant improvement in their overall out-migration from before the pandemic. Non-recreational counties actually had their out-migration worsen after the pandemic.\n\n\n\n\n\n\n\n\n\n\nCounty\nThe following chart shows the percent change in net migration from before the pandemic to the years during and after the pandemic.\nThe chart shows that much of greater Minnesota has experienced an improvement to their net migration numbers. The worsening of net migration mostly occured in the metropolitan areas of the state.\n\n\n\n [1] \"year.group\"       \"countyfp\"         \"County_Name\"      \"avg.in.mig\"      \n [5] \"avg.out.mig\"      \"avg.net.mig\"      \"avg.pop\"          \"avg.in.mig.rate\" \n [9] \"avg.out.mig.rate\" \"avg.net.mig.rate\" \"data_id\"          \"pct.change\"      \n[13] \"improvement\"      \"geometry\""
+  },
+  {
+    "objectID": "USPS_change_of_address.html#before-vs.-after-pandemic",
+    "href": "USPS_change_of_address.html#before-vs.-after-pandemic",
+    "title": "USPS Change of Address data",
+    "section": "Before vs. after pandemic",
+    "text": "Before vs. after pandemic\nThe charts below compare the in migration and out migration over two time periods;\n\nBefore pandemic: April 2017 - March 2020\nAfter pandemic: April 2020 - March 2023\n\n\n\nMinnesota\n\n\n\n\nPlanning Region\n\n\n\n\nEDR\n\n\n\n\nRUCA\n\n\n\n\nRecreation type"
   },
   {
     "objectID": "Data/IPUMS/Description of analysis.html",

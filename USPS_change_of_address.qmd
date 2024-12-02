@@ -333,25 +333,19 @@ girafe(ggobj = net.mig.pr.plot, width_svg = 7, height_svg = 7) %>%
 
 ### EDR
 
-As we get into smaller geographies, we begin to see some interesting patterns. 
+As we get into smaller geographies, we begin to see some interesting patterns.
 
-**Northwest**
-All EDRs saw significant improvement from their net out migration in 2017. EDR 5 actually experienced a net in-migration for a few years before falling back to net out-migration.
+**Northwest** All EDRs saw significant improvement from their net out migration in 2017. EDR 5 actually experienced a net in-migration for a few years before falling back to net out-migration.
 
-**Northeast**
-The arrowhead has seen improvement in their net out-migration during and after their pandemic.
+**Northeast** The arrowhead has seen improvement in their net out-migration during and after their pandemic.
 
-**Central**
-There is improvement among all EDRs in their net-out migration numbers. EDR 7E actually experienced a net in-migration during the pandemic and continues to be breaking even.
+**Central** There is improvement among all EDRs in their net-out migration numbers. EDR 7E actually experienced a net in-migration during the pandemic and continues to be breaking even.
 
 **Seven County Metro** The seven county metro continues a slide in their net out-migration with slight improvement over the last few years.
 
-**Southwest**
-Southwest hasn't seen a whole love of change except for EDR 9 which experienced a huge drop off.
+**Southwest** Southwest hasn't seen a whole love of change except for EDR 9 which experienced a huge drop off.
 
-**Southeast**
-A bit of a roller coaster for Southeast with big improvement in out-migration followed by a steep worsening. In the last year they are right back where they started.
-
+**Southeast** A bit of a roller coaster for Southeast with big improvement in out-migration followed by a steep worsening. In the last year they are right back where they started.
 
 <br>
 
@@ -401,7 +395,6 @@ girafe(ggobj = net.mig.edr.plot, width_svg = 7, height_svg = 10) %>%
 ```
 
 <br>
-
 
 ### RUCA
 
@@ -658,5 +651,155 @@ girafe(ggobj = before.after.pan.mig.rates.ruca.plot, width_svg = 7, height_svg =
                  opts_sizing(rescale = FALSE))      
 
 ```
+
+<br>
+
+### Recreation type
+
+Recreational counties has significant improvement in their overall out-migration from before the pandemic. Non-recreational counties actually had their out-migration worsen after the pandemic.
+
+<br>
+
+```{r net mig before and after pandemic rec}
+before.after.pan.mig.rates.rec <- master.usps %>%
+  group_by(PanYEAR, REC_2015) %>%
+  summarize(in.mig = sum(InMig_countyYYYYMM_IMP),
+            out.mig = sum(OutMig_countyYYYYMM_IMP),
+            net.mig = sum(NetMig_countyYYYYMM_IMP),
+            pop = sum(PopbyMonth[MONTH == 7])) %>%
+  ungroup() %>%
+  mutate(year.group = ifelse(PanYEAR %in% c(1,2,3), "Before pandemic", "After pandemic")) %>%
+  group_by(year.group, REC_2015) %>%
+  summarize(avg.in.mig = mean(in.mig),
+            avg.out.mig = mean(out.mig),
+            avg.net.mig = mean(net.mig),
+            avg.pop = mean(pop)) %>%
+  ungroup() %>%
+  mutate(avg.in.mig.rate = (avg.in.mig / avg.pop) * 10000,
+         avg.out.mig.rate = (avg.out.mig / avg.pop) * 10000,
+         avg.net.mig.rate = (avg.net.mig / avg.pop) * 10000,
+         year.group = fct_relevel(year.group, "Before pandemic", "After pandemic"),
+         data_id = seq(n()),
+       REC_2015 = ifelse(REC_2015 == 1, "Recreational", "Not recreational"),
+       REC_2015 = fct_relevel(REC_2015, "Recreational", "Not recreational"))
+
+before.after.pan.mig.rates.rec.plot <- ggplot(before.after.pan.mig.rates.rec, aes(REC_2015, avg.net.mig.rate, fill = year.group, group = year.group)) +
+  geom_col_interactive(position = "dodge", aes(data_id = data_id, tooltip = paste(REC_2015, "\nBefore or after pandemic:", year.group, "\nAverage in-migration: ", comma(avg.in.mig, accuracy = 1), "\nAverage out-migration: ", comma(avg.out.mig, accuracy = 1), "\nAverage net migration: ", comma(avg.net.mig, accuracy = 1), "\nAverage population: ", comma(avg.pop, accuracy = 1), "\nAverage net migration rate per 10,000: ", comma(avg.net.mig.rate, accuracy = 1), sep = ""))) +
+  geom_label(aes(label = comma(avg.net.mig.rate, accuracy = 1)), show.legend = FALSE, color = "black", size = 5, position = position_dodge(width = .9)) +
+  labs(x="", y = "", color="", title = "Average net migration rate in Minnesota before and after\npandemic",
+       subtitle = "Out-migration improved in all county groups except entirely urban")+
+  scale_y_continuous(labels=scales::comma)+
+  theme_bar+
+  scale_fill_manual(values = brewer.pal(n = 5, "RdYlBu"),
+                    guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 14),
+        axis.text.x = element_text(angle = 25, hjust = .9))
+
+
+girafe(ggobj = before.after.pan.mig.rates.rec.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))      
+
+```
+
+<br>
+
+### County
+
+The following chart shows the percent change in net migration from before the pandemic to the years during and after the pandemic.
+
+The chart shows that much of greater Minnesota has experienced an improvement to their net migration numbers. The worsening of net migration mostly occured in the metropolitan areas of the state.
+
+
+<br>
+
+```{r net mig before and after pandemic county}
+before.after.pan.mig.rates.county <- master.usps %>%
+  group_by(PanYEAR, countyfp, County_Name) %>%
+  summarize(in.mig = sum(InMig_countyYYYYMM_IMP),
+            out.mig = sum(OutMig_countyYYYYMM_IMP),
+            net.mig = sum(NetMig_countyYYYYMM_IMP),
+            pop = sum(PopbyMonth[MONTH == 7])) %>%
+  ungroup() %>%
+  mutate(year.group = ifelse(PanYEAR %in% c(1,2,3), "Before pandemic", "After pandemic")) %>%
+  group_by(year.group, countyfp, County_Name) %>%
+  summarize(avg.in.mig = mean(in.mig),
+            avg.out.mig = mean(out.mig),
+            avg.net.mig = mean(net.mig),
+            avg.pop = mean(pop)) %>%
+  ungroup() %>%
+  mutate(avg.in.mig.rate = (avg.in.mig / avg.pop) * 10000,
+         avg.out.mig.rate = (avg.out.mig / avg.pop) * 10000,
+         avg.net.mig.rate = (avg.net.mig / avg.pop) * 10000,
+         year.group = fct_relevel(year.group, "Before pandemic", "After pandemic"),
+         data_id = seq(n())) %>%
+  group_by(countyfp) %>%
+  mutate(pct.change = (avg.net.mig.rate - avg.net.mig.rate[year.group == "Before pandemic"]) / avg.net.mig.rate[year.group == "Before pandemic"],
+         improvement = ifelse(avg.net.mig.rate[year.group == "After pandemic"] > avg.net.mig.rate[year.group == "Before pandemic"], "Improvement", "Worse")) %>%
+  ungroup() %>%
+  left_join(mn_counties[,c(5,7)], by = "countyfp")
+
+names(before.after.pan.mig.rates.county)
+
+before.after.pan.mig.rates.county.plot <- ggplot(data = filter(before.after.pan.mig.rates.county, year.group == "After pandemic")) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = improvement, data_id = countyfp, tooltip = paste(County_Name, "\nAverage net migration after pandemic: ", comma(avg.net.mig.rate, accuracy = 1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = brewer.pal(n = 5, "RdYlBu")) +
+  labs(title = "Did net migration improve from before the\npandemic?") +
+  theme(legend.box.margin = margin(50, 0, 0, -100),
+        text = element_text(size = 18))
+
+girafe(ggobj = before.after.pan.mig.rates.county.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))      
+
+       
+```
+
+<br>
+
+# Out vs. In migration
+
+So what drove this change across Minnesota? Was it that people stopped moving in to places with worsening net migration numbers? Or, was it that more people left those places? Let's take a look.
+
+<br>
+
+## Before vs. after pandemic{.tabset}
+
+The charts below compare the in migration and out migration over two time periods;
+
+* Before pandemic: April 2017 - March 2020
+* After pandemic: April 2020 - March 2023
+
+<br>
+
+### Minnesota
+
+<br>
+
+<br>
+
+### Planning Region
+
+<br>
+
+<br>
+
+### EDR
+
+<br>
+
+<br>
+
+### RUCA
+
+<br>
+
+<br>
+
+### Recreation type
+
+<br>
 
 <br>
