@@ -164,7 +164,7 @@ The dataset includes households that file a change-of-address within a county. "
 
 ## The data
 
-Below is the dataset showing only Minensota counties.
+Below is the dataset showing only Minnesota counties.
 
 <br>
 
@@ -173,7 +173,8 @@ original <- read_csv("Data/USPS change of address/PandemicMigration_ByCountyYYYY
 
 master.usps <- original %>%
   mutate(year = as.integer(str_sub(YYYYMM, 1, 4)),
-         countyfp = str_sub(County_FIPS, -3, -1)) %>%
+         countyfp = str_sub(County_FIPS, -3, -1),
+         ) %>%
   filter(State_Name == "Minnesota") %>%
   left_join(counties.regions[,c(-2, -3)], by = c("countyfp"))
 
@@ -711,7 +712,6 @@ The following chart shows the percent change in net migration from before the pa
 
 The chart shows that much of greater Minnesota has experienced an improvement to their net migration numbers. The worsening of net migration mostly occured in the metropolitan areas of the state.
 
-
 <br>
 
 ```{r net mig before and after pandemic county}
@@ -765,41 +765,440 @@ So what drove this change across Minnesota? Was it that people stopped moving in
 
 <br>
 
-## Before vs. after pandemic{.tabset}
+## Before vs. after pandemic {.tabset}
 
 The charts below compare the in migration and out migration over two time periods;
 
-* Before pandemic: April 2017 - March 2020
-* After pandemic: April 2020 - March 2023
+-   Before pandemic: April 2017 - March 2020
+-   After pandemic: April 2020 - March 2023
 
 <br>
 
 ### Minnesota
 
+After the pandemic there was a reduction in out flow and in flow migration across Minnesota. However, the reduction in in-flow was more severe, translating in a worse net outmigration rate. The number of people migrating in to Minnesota after the pandemic reduced by `r comma(1295-1479, accuracy = 1)`, whereas the number of people flowing out of Minnesota reduced by `r comma(1447-1622, accuracy = 1)`.
+
 <br>
+
+```{r in vs out flow mn}
+in.out.mig.mn <- master.usps %>%
+  group_by(PanYEAR) %>%
+  summarize(in.mig = sum(InMig_countyYYYYMM_IMP),
+            out.mig = sum(OutMig_countyYYYYMM_IMP),
+            net.mig = sum(NetMig_countyYYYYMM_IMP),
+            pop = sum(PopbyMonth[MONTH == 7])) %>%
+  ungroup() %>%
+  mutate(year.group = ifelse(PanYEAR %in% c(1,2,3), "Before pandemic", "After pandemic")) %>%
+  group_by(year.group) %>%
+  summarize(avg.in.mig = mean(in.mig),
+            avg.out.mig = mean(out.mig),
+            avg.net.mig = mean(net.mig),
+            avg.pop = mean(pop)) %>%
+  ungroup() %>%
+  mutate(avg.in.mig.rate = (avg.in.mig / avg.pop) * 10000,
+         avg.out.mig.rate = (avg.out.mig / avg.pop) * 10000,
+         avg.net.mig.rate = (avg.net.mig / avg.pop) * 10000,
+         year.group = fct_relevel(year.group, "Before pandemic", "After pandemic")) %>%
+  pivot_longer(names_to = "mig.type", values_to = "avg.rate", 6:8) %>%
+  group_by(mig.type) %>%
+  mutate(mig.rate.change = avg.rate[year.group == "After pandemic"] - avg.rate[year.group == "Before pandemic"]) %>%
+  ungroup() %>%
+  mutate(mig.type = str_replace(mig.type, "avg.in.mig.rate", "Average in flow rate"),
+         mig.type = str_replace(mig.type, "avg.out.mig.rate", "Average out flow rate"),
+         mig.type = str_replace(mig.type, "avg.net.mig.rate", "Average net flow rate"),
+         mig.type = fct_relevel(mig.type, "Average in flow rate", "Average out flow rate", "Average net flow rate"),
+         data_id = seq(n())) 
+
+in.out.mig.mn.plot <- ggplot(data = filter(in.out.mig.mn, year.group == "After pandemic"), aes(mig.type, mig.rate.change, fill = mig.type, group = mig.type)) +
+  geom_col_interactive(position = "dodge", aes(data_id = data_id, tooltip = paste("Minnesota", "\nType of flow: ", mig.type, "\nAverage flow rate before pandemic: ", comma(avg.rate - mig.rate.change, accuracy =1), "\nAverage flow rate after pandemic: ", comma(avg.rate), "\nChange in flow rate since before pandemic: ", comma(mig.rate.change, accuracy = 1), sep = ""))) +
+  geom_label(aes(label = comma(mig.rate.change, accuracy = 1)), show.legend = FALSE, color = "white", size = 5, position = position_dodge(width = .9)) +
+  labs(x="", y = "Flow per 10,000 people", color="", title = "Change in flow rate after pandemic", subtitle = "Out flow has improved but out flow has worsened resulting in a worse net out\nmigration for Minnesota.")+
+  scale_y_continuous(labels=scales::comma)+
+  theme_bar+
+  scale_fill_manual(values = c("#0571b0", "#ca0020", "black"),
+                    guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 14))
+
+
+girafe(ggobj = in.out.mig.mn.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))      
+
+```
 
 <br>
 
 ### Planning Region
 
+Every single region had worse in flow and improved out flow after the pandemic. However, in Greater Minnesota, with the exception of southwest, the improvement in outflow drove the improvement in net migration. For Southwest and the Seven County Mple St. Paul, the significant drop in inflows drove a worsening net out migration.
+
 <br>
+
+```{r in vs out flow pr}
+in.out.mig.pr <- master.usps %>%
+  group_by(PanYEAR, planning.region) %>%
+  summarize(in.mig = sum(InMig_countyYYYYMM_IMP),
+            out.mig = sum(OutMig_countyYYYYMM_IMP),
+            net.mig = sum(NetMig_countyYYYYMM_IMP),
+            pop = sum(PopbyMonth[MONTH == 7])) %>%
+  ungroup() %>%
+  mutate(year.group = ifelse(PanYEAR %in% c(1,2,3), "Before pandemic", "After pandemic")) %>%
+  group_by(year.group, planning.region) %>%
+  summarize(avg.in.mig = mean(in.mig),
+            avg.out.mig = mean(out.mig),
+            avg.net.mig = mean(net.mig),
+            avg.pop = mean(pop)) %>%
+  ungroup() %>%
+  mutate(avg.in.mig.rate = (avg.in.mig / avg.pop) * 10000,
+         avg.out.mig.rate = (avg.out.mig / avg.pop) * 10000,
+         avg.net.mig.rate = (avg.net.mig / avg.pop) * 10000,
+         year.group = fct_relevel(year.group, "Before pandemic", "After pandemic")) %>%
+  pivot_longer(names_to = "mig.type", values_to = "avg.rate", 7:9) %>%
+  group_by(mig.type, planning.region) %>%
+  mutate(mig.rate.change = avg.rate[year.group == "After pandemic"] - avg.rate[year.group == "Before pandemic"]) %>%
+  ungroup() %>%
+  mutate(mig.type = str_replace(mig.type, "avg.in.mig.rate", "Average in flow rate"),
+         mig.type = str_replace(mig.type, "avg.out.mig.rate", "Average out flow rate"),
+         mig.type = str_replace(mig.type, "avg.net.mig.rate", "Average net flow rate"),
+         mig.type = fct_relevel(mig.type, "Average in flow rate", "Average out flow rate", "Average net flow rate"),
+         data_id = seq(n())) 
+
+in.out.mig.pr.plot <- ggplot(data = filter(in.out.mig.pr, year.group == "After pandemic"), aes(planning.region, mig.rate.change, fill = mig.type, group = mig.type)) +
+  geom_col_interactive(position = "dodge", aes(data_id = data_id, tooltip = paste(planning.region, "\nType of flow: ", mig.type, "\nAverage flow rate before pandemic: ", comma(avg.rate - mig.rate.change, accuracy =1), "\nAverage flow rate after pandemic: ", comma(avg.rate), "\nChange in flow rate since before pandemic: ", comma(mig.rate.change, accuracy = 1), sep = ""))) +
+  geom_label(aes(label = comma(mig.rate.change, accuracy = 1)), show.legend = FALSE, color = "white", size = 5, position = position_dodge(width = .9)) +
+  labs(x="", y = "Flow per 10,000 people", color="", title = "Change in flow rate after pandemic", subtitle = "Improvement in net out migration in Greater Minnesota is largely driven by\nsignificantly less out flow.")+
+  scale_y_continuous(labels=scales::comma)+
+  theme_bar+
+  scale_fill_manual(values = c("#0571b0", "#ca0020", "black"),
+                    guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 14),
+        axis.text.x = element_text(angle = 25, hjust = .9))
+
+
+girafe(ggobj = in.out.mig.pr.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))      
+
+```
 
 <br>
 
 ### EDR
 
+For most of Greater Minnesota, there were significant improvements in net migration. All of Northwest had significantly less out flow. That region had some of the largest improvements. Also interesting is Southwest. Although as a region they were an outlier in terms of net migration, it was only due to EDR 9. They had a significant decline in in flow while EDR 6W and 8 experienced significantly larger declines in out flows.
+
 <br>
+
+```{r in vs out flow edr}
+in.out.mig.edr <- master.usps %>%
+  group_by(PanYEAR, edr.simple, planning.region) %>%
+  summarize(in.mig = sum(InMig_countyYYYYMM_IMP),
+            out.mig = sum(OutMig_countyYYYYMM_IMP),
+            net.mig = sum(NetMig_countyYYYYMM_IMP),
+            pop = sum(PopbyMonth[MONTH == 7])) %>%
+  ungroup() %>%
+  mutate(year.group = ifelse(PanYEAR %in% c(1,2,3), "Before pandemic", "After pandemic")) %>%
+  group_by(year.group, edr.simple, planning.region) %>%
+  summarize(avg.in.mig = mean(in.mig),
+            avg.out.mig = mean(out.mig),
+            avg.net.mig = mean(net.mig),
+            avg.pop = mean(pop)) %>%
+  ungroup() %>%
+  mutate(avg.in.mig.rate = (avg.in.mig / avg.pop) * 10000,
+         avg.out.mig.rate = (avg.out.mig / avg.pop) * 10000,
+         avg.net.mig.rate = (avg.net.mig / avg.pop) * 10000,
+         year.group = fct_relevel(year.group, "Before pandemic", "After pandemic")) %>%
+  pivot_longer(names_to = "mig.type", values_to = "avg.rate", 8:10) %>%
+  group_by(mig.type, edr.simple, planning.region) %>%
+  mutate(mig.rate.change = avg.rate[year.group == "After pandemic"] - avg.rate[year.group == "Before pandemic"]) %>%
+  ungroup() %>%
+  mutate(mig.type = str_replace(mig.type, "avg.in.mig.rate", "Average in flow rate"),
+         mig.type = str_replace(mig.type, "avg.out.mig.rate", "Average out flow rate"),
+         mig.type = str_replace(mig.type, "avg.net.mig.rate", "Average net flow rate"),
+         mig.type = fct_relevel(mig.type, "Average in flow rate", "Average out flow rate", "Average net flow rate"),
+         data_id = seq(n())) 
+
+in.out.mig.edr.plot <- ggplot(data = filter(in.out.mig.edr, year.group == "After pandemic"), aes(edr.simple, mig.rate.change, fill = mig.type, group = mig.type)) +
+  facet_wrap(~planning.region, ncol = 2, scales = "free_x") +
+  geom_col_interactive(position = "dodge", aes(data_id = data_id, tooltip = paste(edr.simple, "\nType of flow: ", mig.type, "\nAverage flow rate before pandemic: ", comma(avg.rate - mig.rate.change, accuracy =1), "\nAverage flow rate after pandemic: ", comma(avg.rate), "\nChange in flow rate since before pandemic: ", comma(mig.rate.change, accuracy = 1), sep = ""))) +
+  geom_label(aes(label = comma(mig.rate.change, accuracy = 1)), show.legend = FALSE, color = "white", size = 5, position = position_dodge(width = .9)) +
+  labs(x="", y = "Flow per 10,000 people", color="", title = "Change in flow rate after pandemic", subtitle = "Improvement in net out migration in Greater Minnesota is largely driven by\nsignificantly less out flow.")+
+  scale_y_continuous(labels=scales::comma)+
+  theme_bar+
+  scale_fill_manual(values = c("#0571b0", "#ca0020", "black"),
+                    guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 14),
+        axis.text.x = element_text(angle = 25, hjust = .9))
+
+
+girafe(ggobj = in.out.mig.edr.plot, width_svg = 7, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))      
+
+```
 
 <br>
 
 ### RUCA
 
+Our most rural areas experienced significantly larger improvement in out flows resulting in large improvements in net migration. The opposite is true for our urban areas.
+
 <br>
+
+```{r in vs out flow ruca}
+in.out.mig.ruca <- master.usps %>%
+  group_by(PanYEAR, Dem_Desc) %>%
+  summarize(in.mig = sum(InMig_countyYYYYMM_IMP),
+            out.mig = sum(OutMig_countyYYYYMM_IMP),
+            net.mig = sum(NetMig_countyYYYYMM_IMP),
+            pop = sum(PopbyMonth[MONTH == 7])) %>%
+  ungroup() %>%
+  mutate(year.group = ifelse(PanYEAR %in% c(1,2,3), "Before pandemic", "After pandemic")) %>%
+  group_by(year.group, Dem_Desc) %>%
+  summarize(avg.in.mig = mean(in.mig),
+            avg.out.mig = mean(out.mig),
+            avg.net.mig = mean(net.mig),
+            avg.pop = mean(pop)) %>%
+  ungroup() %>%
+  mutate(avg.in.mig.rate = (avg.in.mig / avg.pop) * 10000,
+         avg.out.mig.rate = (avg.out.mig / avg.pop) * 10000,
+         avg.net.mig.rate = (avg.net.mig / avg.pop) * 10000,
+         year.group = fct_relevel(year.group, "Before pandemic", "After pandemic")) %>%
+  pivot_longer(names_to = "mig.type", values_to = "avg.rate", 7:9) %>%
+  group_by(mig.type, Dem_Desc) %>%
+  mutate(mig.rate.change = avg.rate[year.group == "After pandemic"] - avg.rate[year.group == "Before pandemic"]) %>%
+  ungroup() %>%
+  mutate(mig.type = str_replace(mig.type, "avg.in.mig.rate", "Average in flow rate"),
+         mig.type = str_replace(mig.type, "avg.out.mig.rate", "Average out flow rate"),
+         mig.type = str_replace(mig.type, "avg.net.mig.rate", "Average net flow rate"),
+         mig.type = fct_relevel(mig.type, "Average in flow rate", "Average out flow rate", "Average net flow rate"),
+         data_id = seq(n())) 
+
+in.out.mig.ruca.plot <- ggplot(data = filter(in.out.mig.ruca, year.group == "After pandemic"), aes(Dem_Desc, mig.rate.change, fill = mig.type, group = mig.type)) +
+  geom_col_interactive(position = "dodge", aes(data_id = data_id, tooltip = paste(Dem_Desc, "\nType of flow: ", mig.type, "\nAverage flow rate before pandemic: ", comma(avg.rate - mig.rate.change, accuracy =1), "\nAverage flow rate after pandemic: ", comma(avg.rate), "\nChange in flow rate since before pandemic: ", comma(mig.rate.change, accuracy = 1), sep = ""))) +
+  geom_label(aes(label = comma(mig.rate.change, accuracy = 1)), show.legend = FALSE, color = "white", size = 5, position = position_dodge(width = .9)) +
+  labs(x="", y = "Flow per 10,000 people", color="", title = "Change in flow rate after pandemic", subtitle = "Improvement in net out migration in Greater Minnesota is largely driven by\nsignificantly less out flow.")+
+  scale_y_continuous(labels=scales::comma)+
+  theme_bar+
+  scale_fill_manual(values = c("#0571b0", "#ca0020", "black"),
+                    guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 14),
+        axis.text.x = element_text(angle = 25, hjust = .9))
+
+
+girafe(ggobj = in.out.mig.ruca.plot, width_svg = 7, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))      
+
+```
 
 <br>
 
 ### Recreation type
 
-<br>
+Recreational counties experienced significantly larger improvement in their out flows resulting in a large improvement in their net migration. In non-recreational counties, the in-flows were significantly worse resulting in a worsening net flow.
 
 <br>
+
+```{r in vs out flow rec}
+in.out.mig.rec <- master.usps %>%
+  group_by(PanYEAR, REC_2015) %>%
+  summarize(in.mig = sum(InMig_countyYYYYMM_IMP),
+            out.mig = sum(OutMig_countyYYYYMM_IMP),
+            net.mig = sum(NetMig_countyYYYYMM_IMP),
+            pop = sum(PopbyMonth[MONTH == 7])) %>%
+  ungroup() %>%
+  mutate(year.group = ifelse(PanYEAR %in% c(1,2,3), "Before pandemic", "After pandemic")) %>%
+  group_by(year.group, REC_2015) %>%
+  summarize(avg.in.mig = mean(in.mig),
+            avg.out.mig = mean(out.mig),
+            avg.net.mig = mean(net.mig),
+            avg.pop = mean(pop)) %>%
+  ungroup() %>%
+  mutate(avg.in.mig.rate = (avg.in.mig / avg.pop) * 10000,
+         avg.out.mig.rate = (avg.out.mig / avg.pop) * 10000,
+         avg.net.mig.rate = (avg.net.mig / avg.pop) * 10000,
+         year.group = fct_relevel(year.group, "Before pandemic", "After pandemic")) %>%
+  pivot_longer(names_to = "mig.type", values_to = "avg.rate", 7:9) %>%
+  group_by(mig.type, REC_2015) %>%
+  mutate(mig.rate.change = avg.rate[year.group == "After pandemic"] - avg.rate[year.group == "Before pandemic"]) %>%
+  ungroup() %>%
+  mutate(mig.type = str_replace(mig.type, "avg.in.mig.rate", "Average in flow rate"),
+         mig.type = str_replace(mig.type, "avg.out.mig.rate", "Average out flow rate"),
+         mig.type = str_replace(mig.type, "avg.net.mig.rate", "Average net flow rate"),
+         mig.type = fct_relevel(mig.type, "Average in flow rate", "Average out flow rate", "Average net flow rate"),
+         REC_2015 = ifelse(REC_2015 == 1, "Recreational County", "Non-recreational County"),
+         REC_2015 = fct_relevel(REC_2015, "Recreational County", "Non-recreational County"),
+         data_id = seq(n())) 
+
+in.out.mig.rec.plot <- ggplot(data = filter(in.out.mig.rec, year.group == "After pandemic"), aes(REC_2015, mig.rate.change, fill = mig.type, group = mig.type)) +
+  geom_col_interactive(position = "dodge", aes(data_id = data_id, tooltip = paste(REC_2015, "\nType of flow: ", mig.type, "\nAverage flow rate before pandemic: ", comma(avg.rate - mig.rate.change, accuracy =1), "\nAverage flow rate after pandemic: ", comma(avg.rate), "\nChange in flow rate since before pandemic: ", comma(mig.rate.change, accuracy = 1), sep = ""))) +
+  geom_label(aes(label = comma(mig.rate.change, accuracy = 1)), show.legend = FALSE, color = "white", size = 5, position = position_dodge(width = .9)) +
+  labs(x="", y = "Flow per 10,000 people", color="", title = "Change in flow rate after pandemic", subtitle = "Improvement in net out migration in Greater Minnesota is largely driven by\nsignificantly less out flow.")+
+  scale_y_continuous(labels=scales::comma)+
+  theme_bar+
+  scale_fill_manual(values = c("#0571b0", "#ca0020", "black"),
+                    guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 14),
+        axis.text.x = element_text(angle = 25, hjust = .9))
+
+
+girafe(ggobj = in.out.mig.rec.plot, width_svg = 7, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))      
+
+```
+
+<br>
+
+### Counties
+
+The maps below clearly show that most of Greater Minnesota experienced an improved net migration value while metropolitan areas, and counties with major Universities experienced a worse net migration value after the pandemic.
+
+Also interesting is that nearly all counties that experienced improved net migration values was largely driven by large changes in outflows - essentially, these counties experienced less out migration than before the pandemic.
+
+The opposite is true for urban areas where nearly all counties that experienced a worse net migration value was due to significantly lower inflows than before the pandemic.
+
+There are a couple of exceptions to these trends.
+
+1.  Improved net migration due to larger inflows
+
+-   Red Lake County
+-   Traverse
+-   Pipestone
+
+2.  Worse net migration due to significantly larger outflows
+
+-   Blue Earth county
+
+<br>
+
+```{r in vs out flow counties}
+in.out.mig.county <- master.usps %>%
+  group_by(PanYEAR, County_Name, countyfp) %>%
+  summarize(in.mig = sum(InMig_countyYYYYMM_IMP),
+            out.mig = sum(OutMig_countyYYYYMM_IMP),
+            net.mig = sum(NetMig_countyYYYYMM_IMP),
+            pop = sum(PopbyMonth[MONTH == 7])) %>%
+  ungroup() %>%
+  mutate(year.group = ifelse(PanYEAR %in% c(1,2,3), "Before pandemic", "After pandemic")) %>%
+  group_by(year.group, County_Name, countyfp) %>%
+  summarize(avg.in.mig = mean(in.mig),
+            avg.out.mig = mean(out.mig),
+            avg.net.mig = mean(net.mig),
+            avg.pop = mean(pop)) %>%
+  ungroup() %>%
+  mutate(avg.in.mig.rate = (avg.in.mig / avg.pop) * 10000,
+         avg.out.mig.rate = (avg.out.mig / avg.pop) * 10000,
+         avg.net.mig.rate = (avg.net.mig / avg.pop) * 10000,
+         year.group = fct_relevel(year.group, "Before pandemic", "After pandemic"))
+
+net.mig.improve.county <- in.out.mig.county %>%
+  group_by(County_Name, countyfp) %>%
+  mutate(net.mig.improvement = ifelse(avg.net.mig.rate[year.group == "After pandemic"] > avg.net.mig.rate[year.group == "Before pandemic"], "Improved net migration", "Worsened net migration"))
+
+mig.driver.county <- in.out.mig.county %>%
+  pivot_longer(names_to = "mig.rate.type", values_to = "mig.rate", 8:10) %>%
+  group_by(County_Name, countyfp, mig.rate.type) %>%
+  mutate(mig.rate.change = mig.rate[year.group == "After pandemic"] - mig.rate[year.group == "Before pandemic"]) %>%
+  ungroup() %>%
+  filter(year.group == "After pandemic") %>%
+  group_by(countyfp) %>%
+  mutate(driver = ifelse(mig.rate.change[mig.rate.type == "avg.in.mig.rate"] < 0 & mig.rate.change[mig.rate.type == "avg.out.mig.rate"] > 0 & abs(mig.rate.change[mig.rate.type == "avg.in.mig.rate"]) > mig.rate.change[mig.rate.type == "avg.out.mig.rate"], "Worse net migration - inflow", "Driver"),
+         driver = ifelse(mig.rate.change[mig.rate.type == "avg.in.mig.rate"] < 0 & mig.rate.change[mig.rate.type == "avg.out.mig.rate"] > 0 & abs(mig.rate.change[mig.rate.type == "avg.in.mig.rate"]) < mig.rate.change[mig.rate.type == "avg.out.mig.rate"], "Worse net migration - outflow", driver),
+         driver = ifelse(mig.rate.change[mig.rate.type == "avg.in.mig.rate"] < 0 & mig.rate.change[mig.rate.type == "avg.out.mig.rate"] < 0 & mig.rate.change[mig.rate.type == "avg.in.mig.rate"] < mig.rate.change[mig.rate.type == "avg.out.mig.rate"], "Worse net migration - inflow", driver),
+          driver = ifelse(mig.rate.change[mig.rate.type == "avg.in.mig.rate"] < 0 & mig.rate.change[mig.rate.type == "avg.out.mig.rate"] < 0 & mig.rate.change[mig.rate.type == "avg.in.mig.rate"] > mig.rate.change[mig.rate.type == "avg.out.mig.rate"], "Improved net migration - outflow", driver),
+          driver = ifelse(mig.rate.change[mig.rate.type == "avg.in.mig.rate"] > 0 & mig.rate.change[mig.rate.type == "avg.out.mig.rate"] > 0 & mig.rate.change[mig.rate.type == "avg.in.mig.rate"] > mig.rate.change[mig.rate.type == "avg.out.mig.rate"], "Improved net migration - inflow", driver),
+         driver = ifelse(mig.rate.change[mig.rate.type == "avg.in.mig.rate"] > 0 & mig.rate.change[mig.rate.type == "avg.out.mig.rate"] > 0 & mig.rate.change[mig.rate.type == "avg.in.mig.rate"] < mig.rate.change[mig.rate.type == "avg.out.mig.rate"], "Worse net migration - outflow", driver),
+         driver = ifelse(mig.rate.change[mig.rate.type == "avg.in.mig.rate"] > 0 & mig.rate.change[mig.rate.type == "avg.out.mig.rate"] < 0 & mig.rate.change[mig.rate.type == "avg.in.mig.rate"] > abs(mig.rate.change[mig.rate.type == "avg.out.mig.rate"]), "Improved net migration - inflow", driver),
+         driver = ifelse(mig.rate.change[mig.rate.type == "avg.in.mig.rate"] > 0 & mig.rate.change[mig.rate.type == "avg.out.mig.rate"] < 0 & mig.rate.change[mig.rate.type == "avg.in.mig.rate"] < abs(mig.rate.change[mig.rate.type == "avg.out.mig.rate"]), "Improved net migration - outflow", driver),
+         net.mig.improve = ifelse(mig.rate.change[mig.rate.type == "avg.net.mig.rate"] > 0, "Improved net migration", "Worse net migration"),
+         data_id = seq(n())) %>%
+  left_join(mn_counties[,c(5,7)], by = "countyfp")
+
+
+net.mig.improvement.county.plot <- ggplot(mig.driver.county) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = net.mig.improve, data_id = countyfp, tooltip = paste(County_Name, "\nChange in migration rate: ", comma(mig.rate.change), "\nImproved or worse rate: ", net.mig.improve, "\nDriver of improvement or worsening: ", driver, sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = brewer.pal(n = 6, "RdYlBu"),
+                    guide = guide_legend(ncol = 1)) +
+  labs(title = "Improvement or worsening of net\nmigration",
+       subtitle = "Greater Minnesota counties experienced an improved net\nmigration value") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 14),
+        plot.subtitle = element_text(size = 12))
+
+mig.driver.county.plot <- ggplot(mig.driver.county) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = driver, data_id = countyfp, tooltip = paste(County_Name, "\nChange in migration rate: ", comma(mig.rate.change), "\nImproveme or worse rate: ", net.mig.improve, "\nDriver of improvement or worsening: ", driver, sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("#0571b0", "#92c5de", "#f4a582", "#ca0020"),
+                    guide = guide_legend(ncol = 2)) +
+  labs(title = "Driver of improved or worsening\nnet migration",
+       subtitle = "Nearly all counties with improved net migration\nvalues is due to lower outflow.") +
+  theme(text = element_text(size = 14),
+        legend.position = "bottom",
+        plot.subtitle = element_text(size = 12))
+
+girafe( ggobj =  plot_grid(net.mig.improvement.county.plot, mig.driver.county.plot, ncol = 2), width_svg = 9) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE) ,
+                 opts_sizing(rescale = FALSE))
+
+
+
+```
+
+<br>
+
+## Counties - improved or worsened inflows and outflows
+
+I want to see what the maps look like in terms of which counties had better inflows vs outflows.
+
+The map below shows 2 major themes;
+
+1.  Nearly all counties had worse inflows after the pandemic compared to before.
+2.  Nearly all counties had better outflows after the pandemic compare to before.
+
+There are a couple of exceptions;
+
+1.  Red Lake County - better inflow rate of 31 people per 10,000.
+2.  Traverse County - better inflow rate of 251 people per 10,000
+3.  Pipestone county - better inflow rate of 248 people per 10,000
+
+The map also shows that there are three counties with worse outflows.
+
+1.  Red Lake county - worse outflow rate of 11 more people per 10,000
+2.  Traverse County - worse outflow rate of 170 more people per 10,000
+3.  Blue Earth County - worse outflow rate of 509 more people per 10,000
+
+One other interesting thing to note. Whether a county had better or worse for these flows did not predict whether net migration rates would be better or worse. So even if a county had better outflow rates, it didn't predict whether that county would than have a better net migration rate.
+
+<br>
+
+```{r better or worse in and out flows county}
+better.worse.in.out.flows.county <- mig.driver.county %>%
+  mutate(new.mig.rate.change = ifelse(mig.rate.type == "avg.out.mig.rate", mig.rate.change * -1, mig.rate.change),
+         better.worse = ifelse(new.mig.rate.change > 0, "Better", "Worse"),
+         mig.rate.type = str_replace(mig.rate.type, "avg.in.mig.rate", "Average in flows"),
+         mig.rate.type = str_replace(mig.rate.type, "avg.out.mig.rate", "Average out flows"),
+         mig.rate.type = str_replace(mig.rate.type, "avg.net.mig.rate", "Average net migration"),
+         mig.rate.type = fct_relevel(mig.rate.type, "Average in flows", "Average out flows", "Average net migration"))
+  
+better.worse.in.out.flows.county.map <- ggplot(better.worse.in.out.flows.county) +
+  facet_wrap(~mig.rate.type, ncol = 2) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = better.worse, data_id = countyfp, tooltip = paste(County_Name, "\nType of flow: ", mig.rate.type, "\nAverage rate after pandemic: ", comma(mig.rate.change, accuracy = 1), " per 10,000", "\nBetter or worse than before pandemic: ", better.worse, sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = brewer.pal(n = 6, "RdYlBu")) +
+  labs(title = "Better or worse flows after pandemic?") +
+  theme(legend.box.margin = margin(200, 0, 0, -150),
+        text = element_text(size = 16))
+
+girafe(ggobj = better.worse.in.out.flows.county.map, width_svg = 7, height_svg = 7) %>%  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))      
+
+```
