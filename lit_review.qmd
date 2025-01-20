@@ -131,10 +131,6 @@ mn_counties <- st_read("/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasch
 ```
 
 ```{r import masters}
-master.comp.change <- read_csv("Data/Components of change/Master-comp-change-county.csv") %>%
-  mutate(Dem_Desc = fct_relevel(Dem_Desc, "Entirely rural", "Town/rural mix", "Urban/town/rural mix", "Entirely urban"),
-         edr = fct_relevel(edr, "EDR 1 - Northwest", "EDR 2 - Headwaters", "EDR 3 - Arrowhead", "EDR 4 - West Central", "EDR 5 - North Central", "EDR 6E- Southwest Central", "EDR 6W- Upper Minnesota Valley", "EDR 7E- East Central", "EDR 7W- Central", "EDR 8 - Southwest", "EDR 9 - South Central", "EDR 10 - Southeast", "EDR 11 - 7 County Twin Cities", "Minnesota"),
-         planning.region = fct_relevel(planning.region, "Northwest", "Northeast", "Central", "Seven County Mpls-St Paul", "Southwest", "Southeast"))
 
 master.icpsr <- read_xlsx("Data/ICPSR/Share of movers.xlsx")
 
@@ -429,7 +425,7 @@ And in fact, the author points this out in his 2021 article;
 
 <br>
 
-![Source: Federal Reserve Bank of New York/Equifax Consumer Credit Panel, American Community Survey, and author's calculations.](Lit/etimated%20gross%20migration%20into%20and%20from%20urban%20neighborhoods.png)
+[Source: Federal Reserve Bank of New York/Equifax Consumer Credit Panel, American Community Survey, and author's calculations.](Lit/etimated%20gross%20migration%20into%20and%20from%20urban%20neighborhoods.png)
 
 <br>
 
@@ -447,7 +443,7 @@ Second, the larger driver of the total net migration was actually that there wer
 
 Here is the chart provided for the Twin Cities CSA that was in the report.
 
-![](Lit/estimated%20gross%20and%20net%20migration%20into%20and%20out%20of%20minneapolis.png)
+![](Images/estimated gross and net migration into and out of minneapolis.png)
 
 <br>
 
@@ -508,4 +504,3 @@ girafe(ggobj = minneapolis.migrant.dest.plot, width_svg = 7, height_svg = 7) %>%
 ```
 
 <br>
-
