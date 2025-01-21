@@ -1,0 +1,610 @@
+---
+title: "Population estimates - components of change"
+format: html
+editor: visual
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 4
+runtime: shiny
+resource_files:
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.cpg
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.dbf
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.prj
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.sbn
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.sbx
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.shp.xml
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.shx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(sf)
+library(ggrepel)
+library(scales)
+library(shiny)
+library(shinycssloaders)
+library(ggiraph)
+library(kableExtra)
+library(rmapshaper)
+library(cowplot)
+library(DT)
+library(htmlwidgets)
+library(RColorBrewer)
+library(readxl)
+library(janitor)
+library(lubridate)
+library(systemfonts)
+reset_font_cache()
+library(ggtext)
+library(readxl)
+library(zoo)
+```
+
+```{r loading jon docs and shapefiles, cache=TRUE, include=FALSE}
+theme_bar <- theme_bw() +
+  theme(panel.grid.major = element_line(color = "grey70", linewidth  = 0.1),
+        panel.grid.minor = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_text(face = "bold"),
+        panel.border = element_blank(),
+        legend.background = element_rect(fill = "transparent", color = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.key.size = unit(1, "lines"),
+        legend.margin = margin(0,0,0,0),
+        legend.title = element_blank(),
+        legend.text = element_text(margin = margin(l = 2)),
+        text = element_text(family = "Arial") ,
+        plot.title.position = "plot",
+        plot.title = element_text(face = "bold"))
+
+theme_line <- theme_bw() +
+  theme(legend.background = element_rect(fill = "transparent", color = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.text = element_text(margin = margin(l = 2)),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_line(color = "grey70", linewidth = 0.1),
+        axis.ticks = element_blank(),
+        axis.text = element_text(face = "bold"),
+        panel.border = element_blank(),
+        legend.margin = margin(0,0,0,0),
+        legend.key.size = unit(1, "lines"),
+        text = element_text(family = "Arial") ,
+        plot.title.position = "plot",
+        plot.title = element_text(face = "bold"))
+
+
+theme_sf <- theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_line(color = "white"),
+        panel.border = element_blank(),
+        legend.title = element_blank(),
+        legend.text = element_text(margin = margin(l = 2)),
+        legend.margin = margin(0,0,0,0),
+        legend.key.size = unit(1, "lines"),
+        text = element_text(family = "Arial") ,
+        plot.title.position = "plot",
+        plot.title = element_text(face = "bold"))
+
+regions <- read_csv("/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasche@ruralmn.org/My Drive/Data Prep/R Projects/Join docs/county_regions.csv") %>%
+    select(5,6) %>%
+    unique() %>%
+    mutate(edr = str_replace(edr, "  ", " "),
+           planning.region = str_replace(planning.region, " Minnesota", ""),
+           planning.region = fct_relevel(planning.region, "Northwest", "Northeast", "Central", "Seven County Mpls-St Paul", "Southwest", "Southeast"),
+           edr = fct_relevel(edr, "EDR 1 - Northwest", "EDR 2 - Headwaters", "EDR 3 - Arrowhead", "EDR 4 - West Central", "EDR 5 - North Central", "EDR 6E- Southwest Central", "EDR 6W- Upper Minnesota Valley", "EDR 7E- East Central", "EDR 7W- Central", "EDR 8 - Southwest", "EDR 9 - South Central", "EDR 10 - Southeast", "EDR 11 - 7 County Twin Cities", "Minnesota"))
+
+counties.regions <- read_csv("/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasche@ruralmn.org/My Drive/Data Prep/R Projects/Join docs/county_regions.csv") %>%
+  rename(mif = `MIF Region`) %>%
+  mutate(countyfp = formatC(countyfp, width = 3, flag = "0"),
+         Name = str_to_title(Name),
+         Name = str_replace(Name, "Q", "q"),
+         Name = str_replace(Name, "Of The", "of the"),
+         Name = str_replace(Name, "Mcleod", "McLeod"),
+         Dem_Desc = ifelse(Name == "Minnesota", "Minnesota", Dem_Desc) ,
+         edr = str_replace(edr, "  ", " "),
+         planning.region = str_replace(planning.region, " Minnesota", ""),
+         planning.region = fct_relevel(planning.region, "Northwest", "Northeast", "Central", "Seven County Mpls-St Paul", "Southwest", "Southeast"),
+         edr = fct_relevel(edr, "EDR 1 - Northwest", "EDR 2 - Headwaters", "EDR 3 - Arrowhead", "EDR 4 - West Central", "EDR 5 - North Central", "EDR 6E- Southwest Central", "EDR 6W- Upper Minnesota Valley", "EDR 7E- East Central", "EDR 7W- Central", "EDR 8 - Southwest", "EDR 9 - South Central", "EDR 10 - Southeast", "EDR 11 - 7 County Twin Cities", "Minnesota"),
+         mif = ifelse(is.na(mif), "TC", mif),
+         mif = as.factor(mif),
+         mif = fct_relevel(mif, "NW", "NE", "WC", "EC", "SW", "SE", "TC"))
+
+
+color.ruca <- c("Entirely rural" = "#009933", "Town/rural mix" = "#99CC33", "Urban/town/rural mix" = "#CC9966", "Entirely urban" = "#754C29", "Minnesota" = "black")
+
+color.pr <- c("Northwest" = 	"#4575b4", "Northeast" = "grey", "Central" = "#fee090", "Seven County Mpls-St Paul" = "#d73027", "Southwest" = "#91bfdb", "Southeast" = "#fc8d59", "Minnesota" = "black")
+
+color.edr <- c("EDR 1 - Northwest" = "#b3cde3", "EDR 2 - Headwaters" = "#8c96c6", "EDR 3 - Arrowhead" = "#fe9929", "EDR 4 - West Central" = "#8856a7", "EDR 5 - North Central" = "#810f7c", "EDR 6E- Southwest Central" = "#e5f5f9", "EDR 6W- Upper Minnesota Valley" = "#bdc9e1", "EDR 7E- East Central" = "#99d8c9", "EDR 7W- Central" = "#2ca25f", "EDR 8 - Southwest" = "#74a9cf", "EDR 9 - South Central" = "#0570b0", "EDR 10 - Southeast" = "#d7301f", "EDR 11 - 7 County Twin Cities" = "#d8b365", "Minnesota" = "black")
+
+color.pr.edr <- c ("Northwest" = "#4575b4","Northeast" = "#e0f3f8", "Central" = "#fee090", "Seven County Mpls-St Paul" = "#d73027", "Southwest" = "#91bfdb", "Southeast" = "#fc8d59", "Minnesota" = "black", "EDR 1 - Northwest" = "#b3cde3", "EDR 2 - Headwaters" = "#8c96c6", "EDR 3 - Arrowhead" = "#fe9929", "EDR 4 - West Central" = "#8856a7", "EDR 5 - North Central" = "#810f7c", "EDR 6E- Southwest Central" = "#e5f5f9", "EDR 6W- Upper Minnesota Valley" = "#bdc9e1", "EDR 7E- East Central" = "#99d8c9", "EDR 7W- Central" = "#2ca25f", "EDR 8 - Southwest" = "#74a9cf", "EDR 9 - South Central" = "#0570b0", "EDR 10 - Southeast" = "#d7301f", "EDR 11 - 7 County Twin Cities" = "#d8b365")
+
+mn_counties <- st_read("/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasche@ruralmn.org/My Drive/Data Prep/R Projects/Shapefiles/County shapefiles/MNCounties_MNDOT.shp", quiet = TRUE) %>%
+  ms_simplify(keep = .01, keep_shapes = TRUE) %>%
+  rename(countyfp = FIPS_CODE)
+
+```
+
+```{r master components of change}
+county.typology <- read_csv("Data/County typology/county_typology.csv")
+
+master.comp.change <- read_csv("Data/Components of change/Master-comp-change-county.csv") %>%
+  mutate(edr = fct_relevel(edr, "EDR 1 - Northwest", "EDR 2 - Headwaters", "EDR 3 - Arrowhead", "EDR 4 - West Central", "EDR 5 - North Central", "EDR 6E- Southwest Central", "EDR 6W- Upper Minnesota Valley", "EDR 7E- East Central", "EDR 7W- Central", "EDR 8 - Southwest", "EDR 9 - South Central", "EDR 10 - Southeast", "EDR 11 - 7 County Twin Cities", "Minnesota"),
+         edr.simple = fct_relevel(edr.simple, "EDR 1", "EDR 2", "EDR 3", "EDR 4", "EDR 5", "EDR 6E", "EDR 6W", "EDR 7E", "EDR 7W", "EDR 8", "EDR 9", "EDR 10", "EDR 11"),
+         planning.region = fct_relevel(planning.region, "Northwest", "Northeast", "Central", "Seven County Mpls-St Paul", "Southwest", "Southeast"),
+         Dem_Desc = fct_relevel(Dem_Desc, "Entirely rural", "Town/rural mix", "Urban/town/rural mix", "Entirely urban")) %>%
+  left_join(county.typology[,c(1,3)], by = "countyfp") %>%
+  mutate(recreational = ifelse(REC_2015 == 1 & Dem_Desc == "Urban/town/rural mix", "Urban/town/rural mix - Recreational",
+                               ifelse(REC_2015 == 1 & Dem_Desc == "Town/rural mix", "Town/rural mix - Recreational",
+                                      ifelse(REC_2015 == 1 & Dem_Desc == "Entirely rural", "Entirely rural - Recreational", as.character(Dem_Desc)))),
+         recreational = fct_relevel(recreational, "Entirely rural", "Entirely rural - Recreational", "Town/rural mix", "Town/rural mix - Recreational", "Urban/town/rural mix", "Urban/town/rural mix - Recreational", "Entirely urban"))
+  
+```
+
+<br>
+
+The following is an analysis of the components of change for Minnesota counties. The data is from the U.S. Census Bureau's Annual Population Estimates.
+
+Each year, the United States Census Bureau produces and publishes estimates of the population for the nation, states, metropolitan and micropolitan statistical areas, counties, state/county equivalents, and Puerto Rico. We estimate the resident population for each year since the most recent decennial census by using measures of population change. The resident population includes all people currently residing in the United States.
+
+With each annual release of population estimates, the Population Estimates Program revises and updates the entire time series of estimates from April 1, 2020 to July 1 of the current year, which we refer to as the vintage year. We use the term “vintage” to denote an entire time series created with a consistent population starting point and methodology. The release of a new vintage of estimates supersedes any previous series and incorporates the most up-to-date input data and methodological improvements.
+
+The population estimates are used for federal funding allocations, as controls for major surveys including the Current Population Survey and the American Community Survey (ACS), for community development, to aid business planning, and as denominators for statistical rates, among many other uses. Overall, the estimates time series from 2010 to 2020 was very accurate, even accounting for ten years of population change. The mean absolute percent error (MAPE), which is the average absolute difference between the final total resident population estimates and 2020 Census counts, was only about 2.9 percent across all counties.
+
+We produce estimates using a cohort-component method, which is derived from the demographic balancing equation:
+
+Population base + Births - Deaths + Migration = Population estimate
+
+<br>
+
+**Vital Statistics**
+
+Vital statistics encompass two of the core components of the demographic equation: births and deaths. We receive data on vital records from the National Center for Health Statistics (NCHS) and, until V2024, the FSCPE. NCHS data are derived from birth and death certificates across the United States. Birth data include date of birth, sex of child, residence of mother, and race and Hispanic origin of both mother and father. Death data include residence, age, sex, race, and Hispanic origin of each decedent, and the date each death occurred.
+
+**Net Domestic Migration**
+
+The third major component of the balancing equation is migration. Migration can be divided into net domestic migration (NDM) within the United States and net international migration (NIM) between the United States and elsewhere. The Population Estimates Program calculates domestic migration using several data sources and methods depending on the age group in question and the level of characteristic detail required.
+
+For state and county total estimates, we calculate county-specific net domestic migration based on four data sources:
+
+1.  Internal Revenue Service (IRS) tax return data for ages 0 to 64;
+2.  Medicare enrollment data from Centers for Medicare and Medicaid Services (CMS) for the population aged 65 and older;
+3.  Social Security Administration’s (SSA) Numerical Identification File (NUMIDENT) for all ages; and
+4.  Change in the GQ population (described in the group quarters section of this document).
+
+To understand how each component is, and has, contributed to population change, we will split up the components in order to fully explore their contribution.
+
+<br>
+
+# Population
+
+Let's first explore what the population trends have been over the last 15 years.
+
+<br>
+
+## Trends {.tabset}
+
+The following charts provide the change in population from 2000 to 2023.
+
+Although the state has grown in population by 16.3% since 2000, that growth hasn't been even across the state, nor has it been even across rurality. Our most rural counties of Minnesota that are not categorized as "recreational" have experienced a population loss of 13.2% whereas entirely rural counties that are "recretaional" have experienced a population increase of 2.4%. 
+
+In addition, town/rural mix counties that are recreational have experienced an increase of 12.4% in population compared to a loss of 1.4%. 
+
+Essentially, our most rural, non-recreational counties have experienced population loss. 
+
+When looking at the planning region level, all regions have experienced positive population growth, but within those regions that isn't the case. There is population losses concentrated in counties located in Southwest Minnesota, and along the very northwest board of Minnesota.
+
+<br>
+
+### Minnesota
+
+Since 2000, the Minnesota population has increased pretty consistently. By 2023, the population was 16% higher than in 2000.
+
+<br>
+
+```{r pop trend mn}
+pop.trend.mn <- master.comp.change %>%
+  group_by(year) %>%
+  summarize(pop.est = sum(pop.est)) %>%
+  ungroup() %>%
+  mutate(pop.change.index = (pop.est - pop.est[year == min(year)]) / pop.est[year == min(year)],
+         data_id = seq(n()))
+
+
+pop.trend.mn.plot <- ggplot(pop.trend.mn, aes(year, pop.change.index)) +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_line(size = 3) +
+  geom_point_interactive(size = 5, aes(data_id = data_id, tooltip = paste(year, "\nPopulation estimate: ", comma(pop.est), "\nChange in population since ", min(pop.trend.mn$year), ": ", percent(pop.change.index, accuracy = .1), sep = ""))) +
+  labs(x="", 
+       y = "", 
+       color="", 
+       title = paste("Change in population since ", min(pop.trend.mn$year), sep = ""))+
+  geom_label_repel(data = filter(pop.trend.mn, year == max(year)), aes(label = percent(pop.change.index, accuracy = .1)), show.legend = FALSE, size = 5) +
+  scale_y_continuous(labels=scales::percent)+
+  scale_x_continuous(breaks = seq(1900, 2050, 2)) +
+  theme_line+
+  theme(legend.position = "none",
+        text = element_text(size = 16),
+        axis.text.x = element_text(angle = 25, hjust = .9))
+
+girafe(ggobj = pop.trend.mn.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+```
+
+<br>
+
+### RUCA
+
+There are two points here.
+
+First, population growth is occurring in all RUCA categories except Entirely rural. The more urban a county is, the larger the increase in population since 2000.
+
+Second, the Census Bureau continues to underestimate the population performance of rural county groups. This is why there are consistent increases/up-adjusting in population change at the 2011 and 2021 values. The 2010 and 2020 populations are estimates and when they begin the new population estimates for the new decade, they are always adjusting them up.
+
+<br>
+
+```{r pop trend ruca}
+pop.trend.ruca <- master.comp.change %>%
+  group_by(year, Dem_Desc) %>%
+  summarize(pop.est = sum(pop.est)) %>%
+  ungroup() %>%
+  group_by(Dem_Desc) %>%
+  mutate(pop.change.index = (pop.est - pop.est[year == min(year)]) / pop.est[year == min(year)]) %>%
+  ungroup() %>%
+  mutate(data_id = seq(n()))
+
+
+pop.trend.ruca.plot <- ggplot(pop.trend.ruca, aes(year, pop.change.index, color = Dem_Desc)) +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_line(size = 3) +
+  geom_point_interactive(size = 5, aes(data_id = data_id, tooltip = paste(Dem_Desc, "\nYear: ", year, "\nPopulation estimate: ", comma(pop.est), "\nChange in population since ", min(pop.trend.ruca$year), ": ", percent(pop.change.index, accuracy = .1), sep = ""))) +
+  labs(x="", 
+       y = "", 
+       color="", 
+       title = paste("Change in population since ", min(pop.trend.ruca$year), sep = ""))+
+  geom_label_repel(data = filter(pop.trend.ruca, year == max(year)), aes(label = percent(pop.change.index, accuracy = .1)), show.legend = FALSE, size = 5) +
+  scale_y_continuous(labels=scales::percent)+
+  scale_x_continuous(breaks = seq(1900, 2050, 2)) +
+  scale_color_manual(values = color.ruca,
+                     guide = guide_legend(ncol = 2)) +
+  theme_line+
+  theme(legend.position = "bottom",
+        text = element_text(size = 16),
+        axis.text.x = element_text(angle = 25, hjust = .9))
+
+girafe(ggobj = pop.trend.ruca.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+```
+
+<br>
+
+### County recreational
+
+**Entirely rural**
+
+The counties that are entirely rural but not recreational are experiencing the largest declines while the entirely rural - recreational are seeing some modest population gains.
+
+**Town/rural mix**
+
+Town rural mix counties that are not recreational are seeing some minor population declines while the recreational counties are experiencing very large population gains.
+
+**Urban/town/rural mix**
+
+Urban town rural mix counties that are not recreational are experiencing the second highest population gains at 17.8% while the counties that are recreational are seeing modest growth at 3.4%. 
+
+<br>
+
+```{r pop trend typology}
+pop.trend.rec <- master.comp.change %>%
+  group_by(year, recreational) %>%
+  summarize(pop.est = sum(pop.est)) %>%
+  ungroup() %>%
+  group_by(recreational) %>%
+  mutate(pop.change.index = (pop.est - pop.est[year == min(year)]) / pop.est[year == min(year)]) %>%
+  ungroup() %>%
+  mutate(data_id = seq(n()))
+
+
+pop.trend.rec.plot <- ggplot(pop.trend.rec, aes(year, pop.change.index, color = recreational)) +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_line(size = 3) +
+  geom_point_interactive(size = 5, aes(data_id = data_id, tooltip = paste(recreational, "\nYear: ", year, "\nPopulation estimate: ", comma(pop.est), "\nChange in population since ", min(pop.trend.rec$year), ": ", percent(pop.change.index, accuracy = .1), sep = ""))) +
+  labs(x="", 
+       y = "", 
+       color="", 
+       title = paste("Change in population since ", min(pop.trend.rec$year), sep = ""))+
+  geom_label_repel(data = filter(pop.trend.rec, year == max(year)), aes(label = percent(pop.change.index, accuracy = .1)), show.legend = FALSE, size = 5) +
+  scale_y_continuous(labels=scales::percent)+
+  scale_x_continuous(breaks = seq(1900, 2050, 2)) +
+  scale_color_manual(values = c("#006d2c", "#66c2a4", "#045a8d", "#74a9cf", "#993404", "#fe9929", "black"),
+                     guide = guide_legend(ncol = 3)) +
+  theme_line+
+  theme(legend.position = "bottom",
+        text = element_text(size = 16),
+        axis.text.x = element_text(angle = 25, hjust = .9),
+        legend.text = element_text(size = 10))
+
+girafe(ggobj = pop.trend.rec.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+```
+
+<br>
+
+### Planning Region
+
+Interestingly, all of the planning regions have a higher population in 2023 than they did in 2000. The largest population growth has occurred in Central Minnesota with 30%, followed by the seven county metro with 19%. Southeast and Northwest have experienced population growth of a little over 10% while Northeast and Southwest are about even.
+
+<br>
+
+```{r pop trend pr}
+pop.trend.pr <- master.comp.change %>%
+  group_by(year, planning.region) %>%
+  summarize(pop.est = sum(pop.est)) %>%
+  ungroup() %>%
+  group_by(planning.region) %>%
+  mutate(pop.change.index = (pop.est - pop.est[year == min(year)]) / pop.est[year == min(year)]) %>%
+  ungroup() %>%
+  mutate(data_id = seq(n()))
+
+
+pop.trend.pr.plot <- ggplot(pop.trend.pr, aes(year, pop.change.index, color = planning.region)) +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_line(size = 3) +
+  geom_point_interactive(size = 5, aes(data_id = data_id, tooltip = paste(planning.region, "\nYear: ", year, "\nPopulation estimate: ", comma(pop.est), "\nChange in population since ", min(pop.trend.pr$year), ": ", percent(pop.change.index, accuracy = .1), sep = ""))) +
+  labs(x="", 
+       y = "", 
+       color="", 
+       title = paste("Change in population since ", min(pop.trend.pr$year), sep = ""))+
+  geom_label_repel(data = filter(pop.trend.pr, year == max(year)), aes(label = percent(pop.change.index, accuracy = .1)), show.legend = FALSE, size = 5) +
+  scale_y_continuous(labels=scales::percent)+
+  scale_x_continuous(breaks = seq(1900, 2050, 2)) +
+  scale_color_manual(values = color.pr,
+                     guide = guide_legend(ncol = 3)) +
+  theme_line+
+  theme(legend.position = "bottom",
+        text = element_text(size = 16),
+        axis.text.x = element_text(angle = 25, hjust = .9),
+        legend.text = element_text(size = 10))
+
+girafe(ggobj = pop.trend.pr.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+```
+
+<br>
+
+### EDR
+
+**Northwest**
+
+All EDRs are experiencing population growth except for EDR 1 which has lost 6.5% of it's population since 2000.
+
+**Northeast**
+
+Minor population growth.
+
+**Central**
+
+Tremendous population growth in all EDRs except Southwest Central which is minimal at 2.2%.
+
+**Southwest**
+
+EDR 9 is the only EDR with population growth at 6.7% more since 2000. EDR 6W and 8 are experiencing loss. EDR 6W in particular has lost 13.5% of it's population since 2000.
+
+**Southeast**
+
+13% growth.
+
+<br>
+
+```{r pop trend edr}
+pop.trend.edr <- master.comp.change %>%
+  group_by(year, edr, planning.region) %>%
+  summarize(pop.est = sum(pop.est)) %>%
+  ungroup() %>%
+  group_by(edr, planning.region) %>%
+  mutate(pop.change.index = (pop.est - pop.est[year == min(year)]) / pop.est[year == min(year)]) %>%
+  ungroup() %>%
+  mutate(data_id = seq(n()))
+
+
+pop.trend.edr.plot <- ggplot(pop.trend.edr, aes(year, pop.change.index, color = edr)) +
+  facet_wrap(~planning.region, ncol = 2, scales = "free_y") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_line(size = 3) +
+  geom_point_interactive(size = 5, aes(data_id = data_id, tooltip = paste(edr, "\nYear: ", year, "\nPopulation estimate: ", comma(pop.est), "\nChange in population since ", min(pop.trend.edr$year), ": ", percent(pop.change.index, accuracy = .1), sep = ""))) +
+  labs(x="", 
+       y = "", 
+       color="", 
+       title = paste("Change in population since ", min(pop.trend.edr$year), sep = ""))+
+  geom_label_repel(data = filter(pop.trend.edr, year == max(year)), aes(label = percent(pop.change.index, accuracy = .1)), show.legend = FALSE, size = 5) +
+  scale_y_continuous(labels=scales::percent)+
+  scale_x_continuous(breaks = seq(1900, 2050, 5)) +
+  scale_color_manual(values = color.edr,
+                     guide = guide_legend(ncol = 3)) +
+  theme_line+
+  theme(legend.position = "bottom",
+        text = element_text(size = 16),
+        axis.text.x = element_text(angle = 25, hjust = .9),
+        legend.text = element_text(size = 10))
+
+girafe(ggobj = pop.trend.edr.plot, width_svg = 7, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+```
+
+<br>
+
+### County
+
+The map below shows that the population is lower in 2023 compared to 2000 for much of Southwest Minnesota, along the border in Northwest, and in the arrowhead.
+
+<br>
+
+```{r pop trend county}
+pop.trend.county <- master.comp.change %>%
+  group_by(countyfp) %>%
+  mutate(pop.change.index = (pop.est - pop.est[year == min(year)]) / pop.est[year == min(year)]) %>%
+  ungroup() %>%
+  mutate(pop.change.index.bins = cut(pop.change.index,
+                                     breaks = c(-1, -.125, 0, .125, .25, 1),
+                                     labels = c("-25.5% to -12.5%", "-12.5% to 0%", "0% to 12.5%", "12.5% to 25.0%", "25.0% or more"))) %>%
+  filter(year == max(year)) %>%
+  left_join(mn_counties[,c(5,7)], by = "countyfp") %>%
+  mutate(data_id = seq(n()))
+
+pop.trend.county.map <- ggplot(pop.trend.county) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pop.change.index.bins, data_id = countyfp, tooltip = paste(Name, "\nYear: ", year, "\nEstimated population: ", comma(pop.est), "\nChange in population since 2000: ", percent(pop.change.index, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("#d73027", "#fc8d59", "#e0f3f8", "#91bfdb", "#4575b4")) +
+  labs(title = "Change in population since 2000") +
+  theme(legend.box.margin = margin(50, 0, 0, -100),
+        text = element_text(size = 16))
+
+girafe(ggobj = pop.trend.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))      
+
+
+```
+
+<br>
+
+The next question is whether one of the components of population change (natural vs. migration) is driving these trends. Let's start with migration.
+
+# Migration
+
+The charts below.........
+
+## Trends{.tabset}
+
+<br>
+
+### Minnesota
+
+The chart below shows that if it wasn't for international migration, Minnesota would be a net exporter of people. Domestic migration is consistently a net out-migration while international migration is between 10,000 and 20,000 net in-migration.
+
+<br>
+
+```{r chart migration index mn}
+mig.mn <- master.comp.change %>%
+  group_by(year) %>%
+  summarize(pop.est = sum(pop.est),
+            int.migration = sum(int.migration),
+            dom.migration = sum(dom.migration),
+            net.migration = sum(net.migration)) %>%
+  ungroup() %>%
+  mutate(data_id = seq(n())) %>%
+  pivot_longer(names_to = "mig.type", values_to = "pop", int.migration:net.migration) %>%
+  mutate(mig.type = fct_relevel(mig.type, "int.migration", "dom.migration", "net.migration"))
+
+mig.mn.plot <- ggplot(mig.mn, aes(year, pop, color = mig.type)) +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_line(size = 3) +
+  geom_point_interactive(size = 5, aes(data_id = data_id, tooltip = paste(year, "\nType of migration: ", mig.type, "\nPopulation change: ", comma(pop), sep = ""))) +
+  labs(x="", y = "", color="", title = "International, domestic, and net migration")+
+  geom_label_repel(data = filter(mig.mn, year == max(year)), aes(label = comma(pop)), show.legend = FALSE, size = 5) +
+  scale_y_continuous(labels=scales::comma)+
+  scale_x_continuous(breaks = seq(1900, 2050, 2)) +
+  theme_line+
+  scale_color_manual(values= brewer.pal(n = 5, "PuBu"),
+                     guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = mig.mn.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+
+```
+
+<br>
+
+### RUCA
+
+The chart below shows that 
+
+<br>
+
+```{r chart migration index ruca}
+mig.ruca <- master.comp.change %>%
+  group_by(year, Dem_Desc) %>%
+  summarize(pop.est = sum(pop.est),
+            int.migration = sum(int.migration),
+            dom.migration = sum(dom.migration),
+            net.migration = sum(net.migration)) %>%
+  ungroup() %>%
+  mutate(data_id = seq(n())) %>%
+  pivot_longer(names_to = "mig.type", values_to = "pop", int.migration:net.migration) %>%
+  mutate(mig.type = fct_relevel(mig.type, "int.migration", "dom.migration", "net.migration"))
+
+
+mig.ruca.plot <- ggplot(mig.ruca, aes(year, pop, color = mig.type)) +
+  facet_wrap(~Dem_Desc, ncol = 2, scales = "free_y") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_line(size = 3) +
+  geom_point_interactive(size = 3.5, aes(data_id = data_id, tooltip = paste(Dem_Desc, "\nYear: ", year, "\nType of migration: ", mig.type, "\nPopulation change: ", comma(pop), sep = ""))) +
+  labs(x="", y = "", color="", title = "International, domestic, and net migration")+
+  geom_label_repel(data = filter(mig.ruca, year == max(year)), aes(label = comma(pop)), show.legend = FALSE, size = 5) +
+  scale_y_continuous(labels=scales::comma)+
+  scale_x_continuous(breaks = seq(1900, 2050, 5)) +
+  theme_line+
+  scale_color_manual(values= brewer.pal(n = 5, "PuBu"),
+                     guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16),
+        axis.text.x = element_text(angle = 25, hjust = .9))
+
+girafe(ggobj = mig.ruca.plot, width_svg = 7, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+
+```
+
+<br>
+
+### Recretional
+
+<br>
+
+<br>
+
+### Planning Region
+
+<br>
+
+<br>
+
+### EDR
+
+<br>
+
+<br>
+
+### County
+
+<br>
+
+<br>

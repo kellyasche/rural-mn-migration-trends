@@ -9,7 +9,7 @@ website:
     left:
       - href: index.qmd
         text: Summary
-      - href: components_of_change.qmd
+      - href: pop_estimates_components_of_change.qmd
         text: Population estimates - components of change
       - lit_review.qmd
       - ipums_analysis.qmd
