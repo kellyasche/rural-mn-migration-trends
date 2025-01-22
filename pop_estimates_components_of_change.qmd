@@ -191,11 +191,11 @@ Let's first explore what the population trends have been over the last 15 years.
 
 The following charts provide the change in population from 2000 to 2023.
 
-Although the state has grown in population by 16.3% since 2000, that growth hasn't been even across the state, nor has it been even across rurality. Our most rural counties of Minnesota that are not categorized as "recreational" have experienced a population loss of 13.2% whereas entirely rural counties that are "recretaional" have experienced a population increase of 2.4%. 
+Although the state has grown in population by 16.3% since 2000, that growth hasn't been even across the state, nor has it been even across rurality. Our most rural counties of Minnesota that are not categorized as "recreational" have experienced a population loss of 13.2% whereas entirely rural counties that are "recretaional" have experienced a population increase of 2.4%.
 
-In addition, town/rural mix counties that are recreational have experienced an increase of 12.4% in population compared to a loss of 1.4%. 
+In addition, town/rural mix counties that are recreational have experienced an increase of 12.4% in population compared to a loss of 1.4%.
 
-Essentially, our most rural, non-recreational counties have experienced population loss. 
+Essentially, our most rural, non-recreational counties have experienced population loss.
 
 When looking at the planning region level, all regions have experienced positive population growth, but within those regions that isn't the case. There is population losses concentrated in counties located in Southwest Minnesota, and along the very northwest board of Minnesota.
 
@@ -301,7 +301,7 @@ Town rural mix counties that are not recreational are seeing some minor populati
 
 **Urban/town/rural mix**
 
-Urban town rural mix counties that are not recreational are experiencing the second highest population gains at 17.8% while the counties that are recreational are seeing modest growth at 3.4%. 
+Urban town rural mix counties that are not recreational are experiencing the second highest population gains at 17.8% while the counties that are recreational are seeing modest growth at 3.4%.
 
 <br>
 
@@ -494,7 +494,7 @@ The next question is whether one of the components of population change (natural
 
 The charts below.........
 
-## Trends{.tabset}
+## Trends {.tabset}
 
 <br>
 
@@ -542,7 +542,15 @@ girafe(ggobj = mig.mn.plot, width_svg = 7, height_svg = 7) %>%
 
 ### RUCA
 
-The chart below shows that 
+The chart below shows that trends are changing.
+
+**Domestic migration**
+
+Rural areas of Minnesota were experiencing a growing net out-migration from 2000 to 2010. However, that began to change and by 2017 rural areas were experiencing a net in-migration. The opposite is true for entirely urban areas. From 2000 to 2010, domestic migration was improving to the point where experiencing a net in-migration by 2010. However, that trend reversed and they are now trending down to the point where they are experiencing a net out-migration.
+
+**International migration**
+
+International migration plays a minor role in rural areas of Minnesota, but is significant in our urban areas, and is consistenyl a net in-migration for these county groups.
 
 <br>
 
@@ -588,6 +596,43 @@ girafe(ggobj = mig.ruca.plot, width_svg = 7, height_svg = 10) %>%
 ### Recretional
 
 <br>
+
+```{r chart migration index recreational}
+mig.rec <- master.comp.change %>%
+  group_by(year, recreational) %>%
+  summarize(pop.est = sum(pop.est),
+            int.migration = sum(int.migration),
+            dom.migration = sum(dom.migration),
+            net.migration = sum(net.migration)) %>%
+  ungroup() %>%
+  mutate(data_id = seq(n())) %>%
+  pivot_longer(names_to = "mig.type", values_to = "pop", int.migration:net.migration) %>%
+  mutate(mig.type = fct_relevel(mig.type, "int.migration", "dom.migration", "net.migration"))
+
+
+mig.rec.plot <- ggplot(mig.rec, aes(year, pop, color = mig.type)) +
+  facet_wrap(~recreational, ncol = 2, scales = "free_y") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_line(size = 3) +
+  geom_point_interactive(size = 3.5, aes(data_id = data_id, tooltip = paste(recreational, "\nYear: ", year, "\nType of migration: ", mig.type, "\nPopulation change: ", comma(pop), sep = ""))) +
+  labs(x="", y = "", color="", title = "International, domestic, and net migration")+
+  geom_label_repel(data = filter(mig.rec, year == max(year)), aes(label = comma(pop)), show.legend = FALSE, size = 5) +
+  scale_y_continuous(labels=scales::comma)+
+  scale_x_continuous(breaks = seq(1900, 2050, 5)) +
+  theme_line+
+  scale_color_manual(values= brewer.pal(n = 5, "PuBu"),
+                     guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16),
+        axis.text.x = element_text(angle = 25, hjust = .9))
+
+girafe(ggobj = mig.rec.plot, width_svg = 7, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+
+```
 
 <br>
 
