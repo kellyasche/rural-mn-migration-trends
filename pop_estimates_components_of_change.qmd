@@ -593,7 +593,13 @@ girafe(ggobj = mig.ruca.plot, width_svg = 7, height_svg = 10) %>%
 
 <br>
 
-### Recretional
+### Recreational
+
+**Entirely rural** The recreational version of this county group has done significantly better in terms of net in-migration.
+
+**Town/rural mix** Similary to the entirely rural folks, the town/rural mix counties that are recreational have done significantly better in migration.
+
+**Urban/town/rural mix** REcretaional is doing better.
 
 <br>
 
@@ -638,18 +644,156 @@ girafe(ggobj = mig.rec.plot, width_svg = 7, height_svg = 10) %>%
 
 ### Planning Region
 
+Planning regions in Greater Minnesota follow the patterns we have seen for rural counties - worsening domestic migration through the 2000s, with slow improvement starting around 2012.
+
 <br>
+
+```{r chart migration index planning region}
+mig.pr <- master.comp.change %>%
+  group_by(year, planning.region) %>%
+  summarize(pop.est = sum(pop.est),
+            int.migration = sum(int.migration),
+            dom.migration = sum(dom.migration),
+            net.migration = sum(net.migration)) %>%
+  ungroup() %>%
+  mutate(data_id = seq(n())) %>%
+  pivot_longer(names_to = "mig.type", values_to = "pop", int.migration:net.migration) %>%
+  mutate(mig.type = fct_relevel(mig.type, "int.migration", "dom.migration", "net.migration"))
+
+
+mig.pr.plot <- ggplot(mig.pr, aes(year, pop, color = mig.type)) +
+  facet_wrap(~planning.region, ncol = 2, scales = "free_y") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_line(size = 3) +
+  geom_point_interactive(size = 3.5, aes(data_id = data_id, tooltip = paste(planning.region, "\nYear: ", year, "\nType of migration: ", mig.type, "\nPopulation change: ", comma(pop), sep = ""))) +
+  labs(x="", y = "", color="", title = "International, domestic, and net migration")+
+  geom_label_repel(data = filter(mig.pr, year == max(year)), aes(label = comma(pop)), show.legend = FALSE, size = 5) +
+  scale_y_continuous(labels=scales::comma)+
+  scale_x_continuous(breaks = seq(1900, 2050, 5)) +
+  theme_line+
+  scale_color_manual(values= brewer.pal(n = 5, "PuBu"),
+                     guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16),
+        axis.text.x = element_text(angle = 25, hjust = .9))
+
+girafe(ggobj = mig.pr.plot, width_svg = 7, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+
+```
 
 <br>
 
 ### EDR
 
+Most EDRs are following the similar pattern except for the following;
+
+- EDR 1 Northwest: it's been pretty rough
+- EDR 8 Southwest: it's been pretty rough
+
 <br>
+
+```{r chart migration index edr}
+mig.edr <- master.comp.change %>%
+  group_by(year, edr) %>%
+  summarize(pop.est = sum(pop.est),
+            int.migration = sum(int.migration),
+            dom.migration = sum(dom.migration),
+            net.migration = sum(net.migration)) %>%
+  ungroup() %>%
+  mutate(data_id = seq(n())) %>%
+  pivot_longer(names_to = "mig.type", values_to = "pop", int.migration:net.migration) %>%
+  mutate(mig.type = fct_relevel(mig.type, "int.migration", "dom.migration", "net.migration"))
+
+
+mig.edr.plot <- ggplot(mig.edr, aes(year, pop, color = mig.type)) +
+  facet_wrap(~edr, ncol = 2, scales = "free_y") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_line(size = 3) +
+  geom_point_interactive(size = 3.5, aes(data_id = data_id, tooltip = paste(edr, "\nYear: ", year, "\nType of migration: ", mig.type, "\nPopulation change: ", comma(pop), sep = ""))) +
+  labs(x="", y = "", color="", title = "International, domestic, and net migration")+
+  geom_label_repel(data = filter(mig.edr, year == max(year)), aes(label = comma(pop)), show.legend = FALSE, size = 5) +
+  scale_y_continuous(labels=scales::comma)+
+  scale_x_continuous(breaks = seq(1900, 2050, 5)) +
+  theme_line+
+  scale_color_manual(values= brewer.pal(n = 5, "PuBu"),
+                     guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16),
+        axis.text.x = element_text(angle = 25, hjust = .9))
+
+girafe(ggobj = mig.edr.plot, width_svg = 7, height_svg = 15) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+
+```
+
 
 <br>
 
 ### County
 
 <br>
+
+```{r chart migration index county}
+mig.county <- master.comp.change %>%
+  select(year, countyfp, Name, int.migration, dom.migration, net.migration) %>%
+  mutate(data_id = seq(n()),
+         time.group = ifelse(year < 2008, "2000-2007",
+                             ifelse(year > 2007 & year < 2015, "2008-2014",
+                                    ifelse(year < 2020 & year > 2014, "2015-2019", "2020-2023")))) %>%
+  group_by(time.group, countyfp, Name) %>%
+  summarize(int.migration = sum(int.migration),
+            dom.migration = sum(dom.migration),
+            net.migration = sum(net.migration)) %>%
+  pivot_longer(names_to = "mig.type", values_to = "pop", int.migration:net.migration) %>%
+  mutate(mig.type = fct_relevel(mig.type, "int.migration", "dom.migration", "net.migration"),
+         pos.neg = ifelse(pop <= 0, "Net out", "Net in")) %>%
+  left_join(mn_counties[,c(5,7)], by = "countyfp")
+
+
+int.mig.county.map <- ggplot(data = filter(mig.county, mig.type == "int.migration")) +
+  facet_wrap(~time.group, ncol = 4) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pos.neg, data_id = Name, tooltip = paste(Name, "\nTime period: ", time.group, "\nType of migration: ", mig.type, "\nChange in migration during time period: ", comma(pop), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("#2c7bb6", "#d7191c")) +
+  labs(title = "Net in or out international migration") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+
+dom.mig.county.map <- ggplot(data = filter(mig.county, mig.type == "dom.migration")) +
+  facet_wrap(~time.group, ncol = 4) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pos.neg, data_id = Name, tooltip = paste(Name, "\nTime period: ", time.group, "\nType of migration: ", mig.type, "\nChange in migration during time period: ", comma(pop), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("#2c7bb6", "#d7191c")) +
+  labs(title = "Net in or out domestic migration") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+net.mig.county.map <- ggplot(data = filter(mig.county, mig.type == "net.migration")) +
+  facet_wrap(~time.group, ncol = 4) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pos.neg, data_id = Name, tooltip = paste(Name, "\nTime period: ", time.group, "\nType of migration: ", mig.type, "\nChange in migration during time period: ", comma(pop), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("#2c7bb6", "#d7191c")) +
+  labs(title = "Net in or out total migration") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+legend <- get_plot_component(int.mig.county.map, "guide-box-bottom", return_all = TRUE)
+
+
+girafe(ggobj = plot_grid(int.mig.county.map + theme(legend.position = "none"), dom.mig.county.map + theme(legend.position = "none"), net.mig.county.map + theme(legend.position = "none"), legend, ncol = 1, nrow = 4, rel_heights = c(1,1,1,.1)), width_svg = 7, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE)) 
+
+
+
+```
 
 <br>
