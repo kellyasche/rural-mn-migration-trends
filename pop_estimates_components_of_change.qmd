@@ -1023,6 +1023,32 @@ girafe(ggobj = nat.change.pr.plot, width_svg = 7, height_svg = 9) %>%
 
 ## EDR
 
+**Northwest**
+
+EDR 1,2,4,5 have identical trends. They were experiencing more births than deaths until relatively recently when it flipped. These regions are all now experiencing slightly more deaths than births.
+
+**Northeast**
+
+Same as planning region.
+
+**Central**
+
+EDR 6E and EDR 7E are all now experiencing more deaths than births. EDR 7W is experiencing significantly more births than deaths.
+
+**Seven County Mpls-St. Paul**
+
+Same as planning region.
+
+**Southwest**
+
+EDR 6W has been having nearly identical births and deaths for 20 years but has now entered into an era of more deaths than births.
+
+EDR 8 and 9 did have significantly more births but now is about even.
+
+**Southeast**
+
+Same as planning region.
+
 <br>
 
 ```{r}
@@ -1066,9 +1092,74 @@ girafe(ggobj = nat.change.edr.plot, width_svg = 7, height_svg = 15) %>%
 
 ## County
 
-<br>
+The following maps provide a pretty clear picture on the trends in the components of natural change. The percent of annual births has been declining over time (becoming less blue), while deaths as a percent of population are increasing (becoming more red). The resulting natural change has been worsening due to these trends (becoming more orange).
 
 <br>
 
+```{r}
+nat.change.county <- master.comp.change %>%
+  filter(year > 2000) %>%
+  select(year, countyfp, Name, pop.est, births, deaths, natural.change) %>%
+  mutate(data_id = seq(n()),
+         time.group = ifelse(year < 2006, "2001-2005",
+                             ifelse(year > 2005 & year < 2011, "2006-2010",
+                                    ifelse(year > 2010 & year < 2016, "2011-2015",
+                                           ifelse(year > 2015 & year < 2021, "2016-2020", "2021-2023"))))) %>%
+  group_by(time.group, countyfp, Name) %>%
+  summarize(pop.est.mean = round(mean(pop.est)),
+            births = sum(births),
+            deaths = sum(deaths),
+            natural.change = sum(natural.change)) %>%
+  pivot_longer(names_to = "natural.change.type", values_to = "pop", births:natural.change) %>%
+  mutate(mig.type = fct_relevel(natural.change.type, "births", "deaths", "natural.change"),
+         annual.pop = ifelse(time.group == "2021-2023", round(pop/3), round(pop/5)),
+         pct.pop.est.mean = annual.pop / pop.est.mean,
+         pct.pop.est.mean = ifelse(natural.change.type == "deaths", pct.pop.est.mean * -1, pct.pop.est.mean)) %>%
+  mutate(pct.pop.est.mean.bins = cut(pct.pop.est.mean,
+                                     breaks = c(-1, -.01, 0, .01, 1),
+                                     labels = c("-2% to -1%", "-1% to -0%", "0% to 1%", "1% to 2%"))) %>%
+  left_join(mn_counties[,c(5,7)], by = "countyfp")
+
+births.county.map <- ggplot(data = filter(nat.change.county, natural.change.type == "births")) +
+  facet_wrap(~time.group, ncol = 5) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.pop.est.mean.bins, data_id = Name, tooltip = paste(Name, "\nTime period: ", time.group, "\nType of natural change: ", natural.change.type, "\nEstimated mean population during time period: ", comma(pop.est.mean), "\nChange in natural change during time period: ", comma(pop), "\nPercent of estimated population: ", percent(pct.pop.est.mean, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("-2% to -1%" = "#d73027", "-1% to -0%" = "#fc8d59", "0% to 1%" = "#e0f3f8", "1% to 2%" = "#4575b4")) +
+  labs(title = "Annual births as a percent of population") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+
+deaths.county.map <- ggplot(data = filter(nat.change.county, natural.change.type == "deaths")) +
+  facet_wrap(~time.group, ncol = 5) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.pop.est.mean.bins, data_id = Name, tooltip = paste(Name, "\nTime period: ", time.group, "\nType of natural change: ", natural.change.type, "\nEstimated mean population during time frame: ", comma(pop.est.mean), "\nChange in natural change during time period: ", comma(pop), "\nPercent of estimated population: ", percent(pct.pop.est.mean, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("-2% to -1%" = "#d73027", "-1% to -0%" = "#fc8d59", "0% to 1%" = "#e0f3f8", "1% to 2%" = "#4575b4")) +
+  labs(title = "Annual deaths as a percent of population") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+
+natural.change.county.map <- ggplot(data = filter(nat.change.county, natural.change.type == "natural.change")) +
+  facet_wrap(~time.group, ncol = 5) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.pop.est.mean.bins, data_id = Name, tooltip = paste(Name, "\nTime period: ", time.group, "\nType of natural change: ", natural.change.type, "\nChange in natural change during time period: ", comma(pop), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("-2% to -1%" = "#d73027", "-1% to -0%" = "#fc8d59", "0% to 1%" = "#e0f3f8", "1% to 2%" = "#4575b4")) +
+  labs(title = "Annual natural change as a percent of population") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+legend <- get_plot_component(natural.change.county.map, "guide-box-bottom", return_all = TRUE)
+
+
+girafe(ggobj = plot_grid(births.county.map + theme(legend.position = "none"), deaths.county.map + theme(legend.position = "none"), natural.change.county.map + theme(legend.position = "none"), legend, ncol = 1, nrow = 4, rel_heights = c(1,1,1,.2)), width_svg = 7, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE)) 
+
+
+```
+
+<br>
 :::
+
 :::
