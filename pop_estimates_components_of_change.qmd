@@ -1162,4 +1162,435 @@ girafe(ggobj = plot_grid(births.county.map + theme(legend.position = "none"), de
 <br>
 :::
 
+# What has largest impact so far?
+
+The next question is what is having the greatest impact on population change currently? This can be hard because not only can population go up or down (negative or positive) but so can all the components. So if there is net out migration, yet natural change is positive and population is increasing, how do you measure the impact of the net out migration?
+
+My first idea is to just create bar charts that breakdown each component as a percentage of the total change. Each component would be positive, thus deaths and births each count equally as a unit of change.
+
+::: panel-tabset
+<br>
+
+## Minnesota
+
+The chart below clearly shows that births has been and continues to be the largest contributor to total unit change in population. However, it is shrinking. There is significant growth in deaths as a share of total unit population change. Migration just isn't that big of a piece.
+
+<br>
+
+```{r}
+comp.change.pct.total.change.mn <- master.comp.change %>%
+  group_by(year) %>%
+  summarize(births = sum(births),
+            deaths = sum(deaths),
+            int.migration = sum(int.migration),
+            dom.migration = sum(dom.migration)) %>%
+  ungroup() %>%
+  pivot_longer(names_to = "component", values_to = "pop", births:dom.migration) %>%
+  mutate(pop.pos = ifelse(pop < 0, pop*-1, pop)) %>%
+  group_by(year) %>%
+  mutate(total.change = sum(pop.pos)) %>%
+  ungroup() %>%
+  mutate(pct.total.change = pop / total.change,
+         component = ifelse(component == "births", "Births",
+                            ifelse(component == "deaths", "Deaths",
+                                   ifelse(component == "dom.migration", "Domestic migration", "International migration"))),
+         component = fct_relevel(component, "Births", "Deaths", "International migration", "Domestic migration"),
+         data_id = seq(n()))
+
+
+comp.change.pct.total.change.mn.plot <- ggplot(comp.change.pct.total.change.mn, aes(year, pct.total.change, color = component)) +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_smooth(se = FALSE, size = 3) +
+  geom_point_interactive(size = 2, aes(data_id = data_id, tooltip = paste("Minnesota", "\nYear: ", year, "\nTotal change units: ", comma(total.change), "\nComponent of change: ", component, "\nNumber of individuals: ", comma(pop), "\nPercent of total change units: ", percent(pct.total.change, accuracy = .1), sep = ""))) +
+  labs(x="", 
+       y = "", 
+       color="", 
+       title = "Minnesota - components of change as a percent of\ntotal change",
+       subtitle = "Deaths becoming more prominent in total population change")+
+  geom_label_repel(data = filter(comp.change.pct.total.change.mn, year %in% c(min(year), max(year))), aes(label = percent(pct.total.change, accuracy = .1)), show.legend = FALSE, size = 5) +
+  scale_y_continuous(labels=scales::percent)+
+  scale_x_continuous(breaks = seq(1900, 2050, 5)) +
+  theme_line+
+  scale_color_manual(values = c("#0571b0", "#ca0020", "#80cdc1", "#018571"),
+                     guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = comp.change.pct.total.change.mn.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+
+```
+
+<br>
+
+## RUCA
+
+**Entirely rural**
+
+Births and deaths in our entirely rural counties have had a similar share of total unit change in population until about 2015. Since than, deaths has been increasing it's share of total unit change.
+
+Interestingly, in the early 2000s, domestic migration was the largest contributor to total unit change in population with nearly 40% of individuals disappearing from those counties. That has improved significantly since that time frame.
+
+**Town/rural mix**
+
+Births was the largest contribution to total unit change in population but has since given way to deaths as the largest share. Migration makes up a pretty small percentage of the total unit change.
+
+**Urban/town/rural mix**
+
+Births made up nearly 50% of the entire unit change in population but that has decreased to 41%. Deaths has increased since that time frame. Domestic migration has gone up and down, but is now a positive share.
+
+**Entirely urban**
+
+Births continue to make up a sizable share of total unit change in population. Deaths are increasing though while domestic migration continues to be burdensome as well.
+
+<br>
+
+```{r}
+comp.change.pct.total.change.ruca <- master.comp.change %>%
+  group_by(year, Dem_Desc) %>%
+  summarize(births = sum(births),
+            deaths = sum(deaths),
+            int.migration = sum(int.migration),
+            dom.migration = sum(dom.migration)) %>%
+  ungroup() %>%
+  pivot_longer(names_to = "component", values_to = "pop", births:dom.migration) %>%
+  mutate(pop.pos = ifelse(pop < 0, pop*-1, pop)) %>%
+  group_by(year, Dem_Desc) %>%
+  mutate(total.change = sum(pop.pos)) %>%
+  ungroup() %>%
+  mutate(pct.total.change = pop / total.change,
+         component = ifelse(component == "births", "Births",
+                            ifelse(component == "deaths", "Deaths",
+                                   ifelse(component == "dom.migration", "Domestic migration", "International migration"))),
+         component = fct_relevel(component, "Births", "Deaths", "International migration", "Domestic migration"),
+         data_id = seq(n()))
+
+
+comp.change.pct.total.change.ruca.plot <- ggplot(comp.change.pct.total.change.ruca, aes(year, pct.total.change, color = component)) +
+  facet_wrap(~Dem_Desc, ncol = 2, scales = "free") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_smooth(se = FALSE, size = 3) +
+  geom_point_interactive(size = 2, aes(data_id = data_id, tooltip = paste("Minnesota", "\nYear: ", year, "\nTotal change units: ", comma(total.change), "\nComponent of change: ", component, "\nNumber of individuals: ", comma(pop), "\nPercent of total change units: ", percent(pct.total.change, accuracy = .1), sep = ""))) +
+  labs(x="", 
+       y = "", 
+       color="", 
+       title = "Minnesota - components of change as a percent of\ntotal change",
+       subtitle = "Deaths becoming more prominent in total population change")+
+  geom_label_repel(data = filter(comp.change.pct.total.change.ruca, year %in% c(min(year), max(year))), aes(label = percent(pct.total.change, accuracy = .1)), show.legend = FALSE, size = 5) +
+  scale_y_continuous(labels=scales::percent)+
+  scale_x_continuous(breaks = seq(1900, 2050, 5)) +
+  theme_line+
+  scale_color_manual(values = c("#0571b0", "#ca0020", "#80cdc1", "#018571"),
+                     guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = comp.change.pct.total.change.ruca.plot, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+
+
+```
+
+<br>
+
+## Recreational
+
+**Entirely rural**
+
+The recreational counties have had the most significant share of their total population unit change from deaths and is currently 54% of the total change. however, births and domestic migration are also sizable.
+
+The non-recreational counties have seen a large increase in births and deaths as a share of the total population unit change while domestic migration has been slowly becoming less bad.
+
+**Town/rural mix**
+
+The recreational counties are experiencing death as a larger share of population unit change4 while births has declined. The domestic migration has increased significantly as well.
+
+For non-recreational counties, births and death make up very similar shares of population change, while international migration has increased and the net out-domestic-migration has improved as well.
+
+**Urban/town/rural mix**
+
+In recreational counties, deaths has stated about the same while births has declined as a share and domestic migration has increased.
+
+In non-recreational counties, births continues to be a major driver in population unit change with death increasing. Domestic migration has improved since 2010 as well.
+
+<br>
+
+```{r}
+comp.change.pct.total.change.rec <- master.comp.change %>%
+  group_by(year, recreational) %>%
+  summarize(births = sum(births),
+            deaths = sum(deaths),
+            int.migration = sum(int.migration),
+            dom.migration = sum(dom.migration)) %>%
+  ungroup() %>%
+  pivot_longer(names_to = "component", values_to = "pop", births:dom.migration) %>%
+  mutate(pop.pos = ifelse(pop < 0, pop*-1, pop)) %>%
+  group_by(year, recreational) %>%
+  mutate(total.change = sum(pop.pos)) %>%
+  ungroup() %>%
+  mutate(pct.total.change = pop / total.change,
+         component = ifelse(component == "births", "Births",
+                            ifelse(component == "deaths", "Deaths",
+                                   ifelse(component == "dom.migration", "Domestic migration", "International migration"))),
+         component = fct_relevel(component, "Births", "Deaths", "International migration", "Domestic migration"),
+         data_id = seq(n()))
+
+
+comp.change.pct.total.change.rec.plot <- ggplot(comp.change.pct.total.change.rec, aes(year, pct.total.change, color = component)) +
+  facet_wrap(~recreational, ncol = 2, scales = "free") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_smooth(se = FALSE, size = 3) +
+  geom_point_interactive(size = 2, aes(data_id = data_id, tooltip = paste(recreational, "\nYear: ", year, "\nTotal change units: ", comma(total.change), "\nComponent of change: ", component, "\nNumber of individuals: ", comma(pop), "\nPercent of total change units: ", percent(pct.total.change, accuracy = .1), sep = ""))) +
+  labs(x="", 
+       y = "", 
+       color="", 
+       title = "Recreational counties - components of change as a percent of\ntotal change",
+       subtitle = "Deaths becoming more prominent in total population change")+
+  geom_label_repel(data = filter(comp.change.pct.total.change.rec, year %in% c(min(year), max(year))), aes(label = percent(pct.total.change, accuracy = .1)), show.legend = FALSE, size = 5) +
+  scale_y_continuous(labels=scales::percent)+
+  scale_x_continuous(breaks = seq(1900, 2050, 5)) +
+  theme_line+
+  scale_color_manual(values = c("#0571b0", "#ca0020", "#80cdc1", "#018571"),
+                     guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = comp.change.pct.total.change.rec.plot, width_svg = 7, height_svg = 12) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+```
+
+<br>
+
+## Planning Region
+
+**Northwest, Central, Northeast**
+
+These planning regions are beginning to experience more deaths than births as a share of population unit change while domestic migration has improved significantly.
+
+**Southwest**
+
+Southwest has even births and deaths as a share of population change while international migration has increased and domestic migration has improved.
+
+**Southeast, Seven County Metro**
+
+Both regions have declining births as a share of population change while domestic migration has not been great. International migration continues to make up a sizable portion, however.
+
+<br>
+
+```{r}
+comp.change.pct.total.change.pr <- master.comp.change %>%
+  group_by(year, planning.region) %>%
+  summarize(births = sum(births),
+            deaths = sum(deaths),
+            int.migration = sum(int.migration),
+            dom.migration = sum(dom.migration)) %>%
+  ungroup() %>%
+  pivot_longer(names_to = "component", values_to = "pop", births:dom.migration) %>%
+  mutate(pop.pos = ifelse(pop < 0, pop*-1, pop)) %>%
+  group_by(year, planning.region) %>%
+  mutate(total.change = sum(pop.pos)) %>%
+  ungroup() %>%
+  mutate(pct.total.change = pop / total.change,
+         component = ifelse(component == "births", "Births",
+                            ifelse(component == "deaths", "Deaths",
+                                   ifelse(component == "dom.migration", "Domestic migration", "International migration"))),
+         component = fct_relevel(component, "Births", "Deaths", "International migration", "Domestic migration"),
+         data_id = seq(n()))
+
+
+comp.change.pct.total.change.pr.plot <- ggplot(comp.change.pct.total.change.pr, aes(year, pct.total.change, color = component)) +
+  facet_wrap(~planning.region, ncol = 2, scales = "free") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_smooth(se = FALSE, size = 3) +
+  geom_point_interactive(size = 2, aes(data_id = data_id, tooltip = paste(planning.region, "\nYear: ", year, "\nTotal change units: ", comma(total.change), "\nComponent of change: ", component, "\nNumber of individuals: ", comma(pop), "\nPercent of total change units: ", percent(pct.total.change, accuracy = .1), sep = ""))) +
+  labs(x="", 
+       y = "", 
+       color="", 
+       title = "Recreational counties - components of change as a percent of\ntotal change",
+       subtitle = "Deaths becoming more prominent in total population change")+
+  geom_label_repel(data = filter(comp.change.pct.total.change.pr, year %in% c(min(year), max(year))), aes(label = percent(pct.total.change, accuracy = .1)), show.legend = FALSE, size = 5) +
+  scale_y_continuous(labels=scales::percent)+
+  scale_x_continuous(breaks = seq(1900, 2050, 5)) +
+  theme_line+
+  scale_color_manual(values = c("#0571b0", "#ca0020", "#80cdc1", "#018571"),
+                     guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = comp.change.pct.total.change.pr.plot, width_svg = 7, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+```
+
+<br>
+
+## EDR
+
+**EDR 1, 2, 4, 5**
+
+These EDRs have a similar pattern - births are beginning to break even with deaths as a share of population change. Domestic migration has either improved but still net out-migration (EDR 1) or are increasing the share towards positive population change (EDR 2, 4, 5).
+
+**EDR 6E, 7w, 7E**
+
+EDR 6E and 7E each have even births and deaths as a share of population change. 7E has significantly better migration numbers compared to 6E, although international migration has been very helpful for 6E.
+
+EDR 7W has significantly larger percentage of births. In the early 2000s, domestic migration was a huge driver but not has slowed a lot. Deaths are increasing significantly as a share of population change.
+
+**EDR 6W, 8, 9**
+
+All three have a declining share of population change going towards births, and increasing deaths as a share of pop change. In addition, domestic migration continues to be a net out, but has improved. International migration contineus to be a larger share as well.
+
+<br>
+
+```{r}
+comp.change.pct.total.change.edr <- master.comp.change %>%
+  group_by(year, edr) %>%
+  summarize(births = sum(births),
+            deaths = sum(deaths),
+            int.migration = sum(int.migration),
+            dom.migration = sum(dom.migration)) %>%
+  ungroup() %>%
+  pivot_longer(names_to = "component", values_to = "pop", births:dom.migration) %>%
+  mutate(pop.pos = ifelse(pop < 0, pop*-1, pop)) %>%
+  group_by(year, edr) %>%
+  mutate(total.change = sum(pop.pos)) %>%
+  ungroup() %>%
+  mutate(pct.total.change = pop / total.change,
+         component = ifelse(component == "births", "Births",
+                            ifelse(component == "deaths", "Deaths",
+                                   ifelse(component == "dom.migration", "Domestic migration", "International migration"))),
+         component = fct_relevel(component, "Births", "Deaths", "International migration", "Domestic migration"),
+         data_id = seq(n()))
+
+
+comp.change.pct.total.change.edr.plot <- ggplot(comp.change.pct.total.change.edr, aes(year, pct.total.change, color = component)) +
+  facet_wrap(~edr, ncol = 2, scales = "free") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_smooth(se = FALSE, size = 3) +
+  geom_point_interactive(size = 2, aes(data_id = data_id, tooltip = paste(edr, "\nYear: ", year, "\nTotal change units: ", comma(total.change), "\nComponent of change: ", component, "\nNumber of individuals: ", comma(pop), "\nPercent of total change units: ", percent(pct.total.change, accuracy = .1), sep = ""))) +
+  labs(x="", 
+       y = "", 
+       color="", 
+       title = "Recreational counties - components of change as a percent of\ntotal change",
+       subtitle = "Deaths becoming more prominent in total population change")+
+  geom_label_repel(data = filter(comp.change.pct.total.change.edr, year %in% c(min(year), max(year))), aes(label = percent(pct.total.change, accuracy = .1)), show.legend = FALSE, size = 5) +
+  scale_y_continuous(labels=scales::percent)+
+  scale_x_continuous(breaks = seq(1900, 2050, 5)) +
+  theme_line+
+  scale_color_manual(values = c("#0571b0", "#ca0020", "#80cdc1", "#018571"),
+                     guide = guide_legend(ncol = 3)) +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = comp.change.pct.total.change.edr.plot, width_svg = 7, height_svg = 17) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_toolbar(saveaspng = FALSE),
+                 opts_sizing(rescale = FALSE))
+```
+
+<br>
+
+## County
+
+The maps below show a few key themes;
+
+1.  Births are declining as a percentage of total population unit change.
+2.  Deaths are increasing as a percentage of total population unit change.
+3.  International migration makes up less than 25% of total population change across Minnesota.
+4.  Domestic out-migration is becoming less severe across rural Minnesota while also changing to a net in-migration.
+
+<br>
+
+```{r}
+comp.change.pct.total.change.county <- master.comp.change %>%
+  filter(year > 2000) %>%
+  select(year, countyfp, Name, births, deaths, int.migration, dom.migration) %>%
+  mutate(data_id = seq(n()),
+         time.group = ifelse(year < 2006, "2001-2005",
+                             ifelse(year > 2005 & year < 2011, "2006-2010",
+                                    ifelse(year > 2010 & year < 2016, "2011-2015",
+                                           ifelse(year > 2015 & year < 2021, "2016-2020", "2021-2023"))))) %>%
+  group_by(time.group, countyfp, Name) %>%
+  summarize(births = sum(births),
+            deaths = sum(deaths),
+            int.migration = sum(int.migration),
+            dom.migration = sum(dom.migration)) %>%
+  pivot_longer(names_to = "component", values_to = "pop", births:dom.migration) %>%
+  mutate(pos.pop = ifelse(pop < 0, pop*-1, pop)) %>%
+  group_by(time.group, countyfp) %>%
+  mutate(total.pop.change = sum(pos.pop)) %>%
+  ungroup() %>%
+  mutate(pct.total.pop.change = pop / total.pop.change) %>%
+  group_by(time.group, countyfp) %>%
+  arrange(desc(pct.total.pop.change)) %>%
+  mutate(rank = seq(n())) %>%
+  ungroup() %>%
+  mutate(component = ifelse(component == "births", "Births",
+                            ifelse(component == "deaths", "Deaths",
+                                   ifelse(component == "int.migration", "International migration", "Domestic migration"))),
+         component = fct_relevel(component, "Births", "Deaths", "International migration", "Domestic migration"),
+         time.group = fct_relevel(time.group, "2001-2005", "2006-2010", "2011-2015", "2016-2020", "2021-2023"),
+         pct.total.pop.change = ifelse(component == "Deaths", pct.total.pop.change *-1, pct.total.pop.change),
+         pct.total.pop.change.bins = cut(pct.total.pop.change,
+                                         breaks = c(-1, -.5, -.25, 0, .25, .5, 1),
+                                         labels = c("-75% to -50%", "-50% to -25%", "-25% to -0%", "0% to 25%", "25% to 50%", "50% to 75%"))) %>%
+  left_join(mn_counties[,c(5,7)], by = "countyfp")
+
+
+births.pct.total.change.county.map <- ggplot(data = filter(comp.change.pct.total.change.county, component == "Births")) +
+  facet_wrap(~time.group, ncol = 5) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.total.pop.change.bins, data_id = Name, tooltip = paste(Name, "\nTime period: ", time.group, "\nComponent: ", component, "\nNumber of individuals: ", comma(pop), "\nTotal population change units during time period: ", comma(total.pop.change), "\nComponent as percentage of total population change units: ", percent(pct.total.pop.change, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("-75% to -50%" = "#b2182b", "-50% to -25%" = "#ef8a62", "-25% to -0%" = "#fddbc7", "0% to 25%" = "#d1e5f0", "25% to 50%" = "#67a9cf", "50% to 75%" = "#2166ac")) +
+  labs(title = "Births as percent of total population unit change") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+
+deaths.pct.total.change.county.map <- ggplot(data = filter(comp.change.pct.total.change.county, component == "Deaths")) +
+  facet_wrap(~time.group, ncol = 5) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.total.pop.change.bins, data_id = Name, tooltip = paste(Name, "\nTime period: ", time.group, "\nComponent: ", component, "\nNumber of individuals: ", comma(pop), "\nTotal population change units during time period: ", comma(total.pop.change), "\nComponent as percentage of total population change units: ", percent(pct.total.pop.change, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("-75% to -50%" = "#b2182b", "-50% to -25%" = "#ef8a62", "-25% to -0%" = "#fddbc7", "0% to 25%" = "#d1e5f0", "25% to 50%" = "#67a9cf", "50% to 75%" = "#2166ac")) +
+  labs(title = "Deaths as percent of total population unit change") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+int.mig.pct.total.change.county.map <- ggplot(data = filter(comp.change.pct.total.change.county, component == "International migration")) +
+  facet_wrap(~time.group, ncol = 5) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.total.pop.change.bins, data_id = Name, tooltip = paste(Name, "\nTime period: ", time.group, "\nComponent: ", component, "\nNumber of individuals: ", comma(pop), "\nTotal population change units during time period: ", comma(total.pop.change), "\nComponent as percentage of total population change units: ", percent(pct.total.pop.change, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("-75% to -50%" = "#b2182b", "-50% to -25%" = "#ef8a62", "-25% to -0%" = "#fddbc7", "0% to 25%" = "#d1e5f0", "25% to 50%" = "#67a9cf", "50% to 75%" = "#2166ac")) +
+  labs(title = "International migration as percent of total population\nunit change") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+dom.mig.pct.total.change.county.map <- ggplot(data = filter(comp.change.pct.total.change.county, component == "Domestic migration")) +
+  facet_wrap(~time.group, ncol = 5) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.total.pop.change.bins, data_id = Name, tooltip = paste(Name, "\nTime period: ", time.group, "\nComponent: ", component, "\nNumber of individuals: ", comma(pop), "\nTotal population change units during time period: ", comma(total.pop.change), "\nComponent as percentage of total population change units: ", percent(pct.total.pop.change, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("-75% to -50%" = "#b2182b", "-50% to -25%" = "#ef8a62", "-25% to -0%" = "#fddbc7", "0% to 25%" = "#d1e5f0", "25% to 50%" = "#67a9cf", "50% to 75%" = "#2166ac")) +
+  labs(title = "Domestic migration as percent of total population\nunit change") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+
+
+legend <- get_plot_component(dom.mig.pct.total.change.county.map, "guide-box-bottom", return_all = TRUE)
+
+
+girafe(ggobj = plot_grid(births.pct.total.change.county.map + theme(legend.position = "none"), deaths.pct.total.change.county.map + theme(legend.position = "none"), int.mig.pct.total.change.county.map + theme(legend.position = "none"), dom.mig.pct.total.change.county.map + theme(legend.position = "none"), legend, ncol = 1, nrow = 5, rel_heights = c(1,1,1,1,.2)), width_svg = 7, height_svg = 12) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE)) 
+```
+
+<br>
 :::
