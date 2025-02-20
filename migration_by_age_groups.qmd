@@ -1,0 +1,816 @@
+---
+title: "Migration by age groups"
+editor: visual
+format: html
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 4
+runtime: shiny
+resource_files:
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.cpg
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.dbf
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.prj
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.sbn
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.sbx
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.shp.xml
+- Data/Shapefiles/County shapefiles/MNCounties_MNDOT.shx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(sf)
+library(ggrepel)
+library(scales)
+library(shiny)
+library(shinycssloaders)
+library(ggiraph)
+library(kableExtra)
+library(rmapshaper)
+library(cowplot)
+library(DT)
+library(htmlwidgets)
+library(RColorBrewer)
+library(readxl)
+library(janitor)
+library(lubridate)
+library(systemfonts)
+reset_font_cache()
+library(ggtext)
+library(readxl)
+library(zoo)
+
+```
+
+```{r loading jon docs and shapefiles, cache=TRUE, include=FALSE}
+
+theme_bar <- theme_bw() +
+  theme(panel.grid.major = element_line(color = "grey70", linewidth  = 0.1),
+        panel.grid.minor = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_text(face = "bold"),
+        panel.border = element_blank(),
+        legend.background = element_rect(fill = "transparent", color = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.key.size = unit(1, "lines"),
+        legend.margin = margin(0,0,0,0),
+        legend.title = element_blank(),
+        legend.text = element_text(margin = margin(l = 2)),
+        text = element_text(family = "Arial") ,
+        plot.title.position = "plot",
+        plot.title = element_text(face = "bold"))
+
+theme_line <- theme_bw() +
+  theme(legend.background = element_rect(fill = "transparent", color = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.text = element_text(margin = margin(l = 2)),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_line(color = "grey70", linewidth = 0.1),
+        axis.ticks = element_blank(),
+        axis.text = element_text(face = "bold"),
+        panel.border = element_blank(),
+        legend.margin = margin(0,0,0,0),
+        legend.key.size = unit(1, "lines"),
+        text = element_text(family = "Arial") ,
+        plot.title.position = "plot",
+        plot.title = element_text(face = "bold"))
+
+
+theme_sf <- theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        panel.background = element_blank(),
+        panel.grid.major = element_line(color = "white"),
+        panel.border = element_blank(),
+        legend.title = element_blank(),
+        legend.text = element_text(margin = margin(l = 2)),
+        legend.margin = margin(0,0,0,0),
+        legend.key.size = unit(1, "lines"),
+        text = element_text(family = "Arial") ,
+        plot.title.position = "plot",
+        plot.title = element_text(face = "bold"))
+
+regions <- read_csv("/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasche@ruralmn.org/My Drive/Data Prep/R Projects/Join docs/county_regions.csv") %>%
+    select(5,6) %>%
+    unique() %>%
+    mutate(edr = str_replace(edr, "  ", " "),
+           planning.region = str_replace(planning.region, " Minnesota", ""),
+           planning.region = fct_relevel(planning.region, "Northwest", "Northeast", "Central", "Seven County Mpls-St Paul", "Southwest", "Southeast"),
+           edr = fct_relevel(edr, "EDR 1 - Northwest", "EDR 2 - Headwaters", "EDR 3 - Arrowhead", "EDR 4 - West Central", "EDR 5 - North Central", "EDR 6E- Southwest Central", "EDR 6W- Upper Minnesota Valley", "EDR 7E- East Central", "EDR 7W- Central", "EDR 8 - Southwest", "EDR 9 - South Central", "EDR 10 - Southeast", "EDR 11 - 7 County Twin Cities", "Minnesota"))
+
+counties.regions <- read_csv("/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasche@ruralmn.org/My Drive/Data Prep/R Projects/Join docs/county_regions.csv") %>%
+  rename(mif = `MIF Region`) %>%
+  mutate(countyfp = formatC(countyfp, width = 3, flag = "0"),
+         Name = str_to_title(Name),
+         Name = str_replace(Name, "Q", "q"),
+         Name = str_replace(Name, "Of The", "of the"),
+         Name = str_replace(Name, "Mcleod", "McLeod"),
+         Dem_Desc = ifelse(Name == "Minnesota", "Minnesota", Dem_Desc) ,
+         edr = str_replace(edr, "  ", " "),
+         planning.region = str_replace(planning.region, " Minnesota", ""),
+         planning.region = fct_relevel(planning.region, "Northwest", "Northeast", "Central", "Seven County Mpls-St Paul", "Southwest", "Southeast"),
+         edr = fct_relevel(edr, "EDR 1 - Northwest", "EDR 2 - Headwaters", "EDR 3 - Arrowhead", "EDR 4 - West Central", "EDR 5 - North Central", "EDR 6E- Southwest Central", "EDR 6W- Upper Minnesota Valley", "EDR 7E- East Central", "EDR 7W- Central", "EDR 8 - Southwest", "EDR 9 - South Central", "EDR 10 - Southeast", "EDR 11 - 7 County Twin Cities", "Minnesota"),
+         mif = ifelse(is.na(mif), "TC", mif),
+         mif = as.factor(mif),
+         mif = fct_relevel(mif, "NW", "NE", "WC", "EC", "SW", "SE", "TC"))
+
+
+color.ruca <- c("Entirely rural" = "#009933", "Town/rural mix" = "#99CC33", "Urban/town/rural mix" = "#CC9966", "Entirely urban" = "#754C29", "Minnesota" = "black")
+
+color.pr <- c("Northwest" = 	"#4575b4", "Northeast" = "grey", "Central" = "#fee090", "Seven County Mpls-St Paul" = "#d73027", "Southwest" = "#91bfdb", "Southeast" = "#fc8d59", "Minnesota" = "black")
+
+color.edr <- c("EDR 1 - Northwest" = "#b3cde3", "EDR 2 - Headwaters" = "#8c96c6", "EDR 3 - Arrowhead" = "#fe9929", "EDR 4 - West Central" = "#8856a7", "EDR 5 - North Central" = "#810f7c", "EDR 6E- Southwest Central" = "#e5f5f9", "EDR 6W- Upper Minnesota Valley" = "#bdc9e1", "EDR 7E- East Central" = "#99d8c9", "EDR 7W- Central" = "#2ca25f", "EDR 8 - Southwest" = "#74a9cf", "EDR 9 - South Central" = "#0570b0", "EDR 10 - Southeast" = "#d7301f", "EDR 11 - 7 County Twin Cities" = "#d8b365", "Minnesota" = "black")
+
+color.pr.edr <- c ("Northwest" = "#4575b4","Northeast" = "#e0f3f8", "Central" = "#fee090", "Seven County Mpls-St Paul" = "#d73027", "Southwest" = "#91bfdb", "Southeast" = "#fc8d59", "Minnesota" = "black", "EDR 1 - Northwest" = "#b3cde3", "EDR 2 - Headwaters" = "#8c96c6", "EDR 3 - Arrowhead" = "#fe9929", "EDR 4 - West Central" = "#8856a7", "EDR 5 - North Central" = "#810f7c", "EDR 6E- Southwest Central" = "#e5f5f9", "EDR 6W- Upper Minnesota Valley" = "#bdc9e1", "EDR 7E- East Central" = "#99d8c9", "EDR 7W- Central" = "#2ca25f", "EDR 8 - Southwest" = "#74a9cf", "EDR 9 - South Central" = "#0570b0", "EDR 10 - Southeast" = "#d7301f", "EDR 11 - 7 County Twin Cities" = "#d8b365")
+
+mn_counties <- st_read("/Users/kellyasche/Library/CloudStorage/GoogleDrive-kasche@ruralmn.org/My Drive/Data Prep/R Projects/Shapefiles/County shapefiles/MNCounties_MNDOT.shp", quiet = TRUE) %>%
+  ms_simplify(keep = .01, keep_shapes = TRUE) %>%
+  rename(countyfp = FIPS_CODE)
+
+```
+
+```{r masters}
+original.bg <- read_csv("Data/Brain gain/Master-brain-gain-counties.csv")
+
+master.bg <- original.bg %>%
+  filter(!age.group %in% c("70-74", "75-79", "80-84", "Over 85", "85 and over")) %>%
+  mutate(Dem_Desc = fct_relevel(Dem_Desc, "Entirely rural", "Town/rural mix", "Urban/town/rural mix", "Entirely urban"),
+         planning.region = fct_relevel(planning.region, "Northwest", "Northeast", "Central", "Seven County Mpls-St Paul", "Southwest", "Southeast"),
+         edr = fct_relevel(edr, "EDR 1 - Northwest", "EDR 2 - Headwaters", "EDR 3 - Arrowhead", "EDR 4 - West Central", "EDR 5 - North Central", "EDR 6E- Southwest Central", "EDR 6W- Upper Minnesota Valley", "EDR 7E- East Central", "EDR 7W- Central", "EDR 8 - Southwest", "EDR 9 - South Central", "EDR 10 - Southeast", "EDR 11 - 7 County Twin Cities", "Minnesota"),
+         recreational = fct_relevel(recreational, "Entirely rural", "Entirely rural - Recreational", "Town/rural mix", "Town/rural mix - Recreational", "Urban/town/rural mix", "Urban/town/rural mix - Recreational", "Entirely urban"))
+
+
+```
+
+# 5-year age groups
+
+This is an attempt to recreate Ben Winchester's research on migration by age groups. It might be good to include something in the final report about "who" is migration to rural areas. Although there isn't a lot of data that can tell us that, we can at least calculate this piece.
+
+Let's get started. Here's what it looks like by regions.
+
+:::: panel-tabset
+## Minnesota
+
+On a whole, the state of Minnesota is pretty good at attracting people aged 40 or younger, but tends to lose a lot of folks that are older. I blame winters. One group that doesn't do great is the college age years. Which is surprising considering how many colleges we have in the state.
+
+<br>
+
+```{r}
+bg.mn <- master.bg %>% 
+  group_by(year, age.group) %>%
+  summarize(pop = sum(pop),
+            comparison.pop = sum(comparison.pop)) %>%
+  ungroup() %>%
+  mutate(pct.expected = (pop - comparison.pop) / comparison.pop,
+         data_id = seq(n()))
+
+bg.mn.plot <- ggplot(bg.mn, aes(age.group, pct.expected)) +
+  facet_wrap(~year, ncol = 2, scales = "free") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_col_interactive(position = "dodge", aes(data_id = data_id, tooltip = paste("Minnesota", "\nYear: ", year, "\nAge group", age.group, "\nYear population: ", comma(pop), "\nPopulation from previous census ten years younger: ", comma(comparison.pop), "\nPercent change/expected pop: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  geom_label(aes(label = percent(pct.expected, accuracy = .1)), show.legend = FALSE) +
+  coord_flip() +
+  labs(x="", 
+       y = "", 
+       color="", 
+       title = "Percent of expected population from previous census")+
+  scale_y_continuous(labels=scales::percent)+
+  theme_bar+
+  theme(legend.position = "none",
+        text = element_text(size = 16))
+
+
+girafe(ggobj = bg.mn.plot, width_svg = 10, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))      
+
+```
+
+<br>
+
+## RUCA
+
+It's interesting to see how different the patterns are by rurality. The more rural county groups tend to lose a lot of their 20 to 29 year olds. Over ten years, these counties lose nearly 20% to 40% of their 10 to 19 year olds. However, that has lessened a bit from 2010 to 2020. Interestingly, these counties tend to see more 30 to 49 year olds than expected. Over ten years, these counties see 25% to 5% more than the previous ten years for each younger age group. However, this has lessened quite a bit compared to 1990 to 2000.
+
+Our more urban areas tend to have the exact opposite pattern. They tend to see a large in-migration of people age 20 to 29, but out migration of folks older than 40. However, this has lessened from 2010 to 2020.
+
+<br>
+
+```{r}
+bg.ruca <- master.bg %>% 
+  group_by(year, age.group, Dem_Desc) %>%
+  summarize(pop = sum(pop),
+            comparison.pop = sum(comparison.pop)) %>%
+  ungroup() %>%
+  mutate(pct.expected = (pop - comparison.pop) / comparison.pop,
+         data_id = seq(n()),
+         year = as.factor(year))
+
+bg.ruca.plot <- ggplot(data = bg.ruca, aes(age.group, pct.expected, fill = year, group = year)) +
+  facet_wrap(~Dem_Desc, ncol = 2, scales = "free_x") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_col_interactive(position = "dodge", aes(data_id = data_id, tooltip = paste(Dem_Desc, "\nYear: ", year, "\nAge group", age.group, "\nYear population: ", comma(pop), "\nPopulation from previous census ten years younger: ", comma(comparison.pop), "\nPercent change/expected pop: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  geom_label(data = filter(bg.ruca, year == "2020"), aes(label = percent(pct.expected, accuracy = .1)), show.legend = FALSE, position = position_dodge(width = .5), size = 3) +
+  coord_flip() +
+  labs(x="", 
+       y = "", 
+       color="", 
+       title = "Percent of expected population from previous census")+
+  scale_y_continuous(labels=scales::percent)+
+  scale_fill_manual(values = brewer.pal(n = 6, "RdYlBu")) +
+  theme_bar+
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+
+
+
+girafe(ggobj = bg.ruca.plot, width_svg = 10, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))  
+```
+
+<br>
+
+## Recreational
+
+This is fascinating. Recreational counties that are entirely rural or town/rural mix have a significantly higher percentage of people that are 30 or older move into those counties compared to non-recreational. In addition, the in-migration goes further up the age groups as well. Urban/town/rural mix counties do not have that same pattern.
+
+<br>
+
+```{r}
+bg.rec <- master.bg %>% 
+  group_by(year, age.group, recreational) %>%
+  summarize(pop = sum(pop),
+            comparison.pop = sum(comparison.pop)) %>%
+  ungroup() %>%
+  mutate(pct.expected = (pop - comparison.pop) / comparison.pop,
+         data_id = seq(n()),
+         year = as.factor(year))
+
+bg.rec.plot <- ggplot(data = bg.rec, aes(age.group, pct.expected, fill = year, group = year)) +
+  facet_wrap(~recreational, ncol = 2, scales = "free_x") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_col_interactive(position = "dodge", aes(data_id = data_id, tooltip = paste(recreational, "\nYear: ", year, "\nAge group", age.group, "\nYear population: ", comma(pop), "\nPopulation from previous census ten years younger: ", comma(comparison.pop), "\nPercent change/expected pop: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  geom_label(data = filter(bg.rec, year == "2020"), aes(label = percent(pct.expected, accuracy = .1)), show.legend = FALSE, position = position_dodge(width = .5), size = 3) +
+  coord_flip() +
+  labs(x="", 
+       y = "", 
+       color="", 
+       title = "Percent of expected population from previous census")+
+  scale_y_continuous(labels=scales::percent)+
+  scale_fill_manual(values = brewer.pal(n = 6, "RdYlBu")) +
+  theme_bar+
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+
+girafe(ggobj = bg.rec.plot, width_svg = 10, height_svg = 15) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE)) 
+```
+
+<br>
+
+## Planning Region
+
+It's worth noting that all patterns are becoming less robust.
+
+**Northwest**
+
+Follows a rural pattern but has pretty robust in-migration in the older age cohorts.
+
+**Northeast**
+
+Follows a rural pattern but really struggles with the older age cohorts.
+
+**Central**
+
+Follows a rural pattern with very robust in-migration of older age cohorts.
+
+**Metro**
+
+Follows a urban pattern but also sees nice growth in 10-20 year olds.
+
+**Southwest**
+
+Follows a rural pattern. Interestingly, from 2010 to 2020, it has experienced a significant percentage increase in in-migration of 20-24 year olds. That's unexpected.
+
+**Southeast**
+
+Follows a rural pattern but struggle with the older age cohorts. Also has seen an increase in 20-24 year olds like Southwest.
+
+<br>
+
+```{r}
+bg.pr <- master.bg %>% 
+  group_by(year, age.group, planning.region) %>%
+  summarize(pop = sum(pop),
+            comparison.pop = sum(comparison.pop)) %>%
+  ungroup() %>%
+  mutate(pct.expected = (pop - comparison.pop) / comparison.pop,
+         data_id = seq(n()),
+         year = as.factor(year))
+
+bg.pr.plot <- ggplot(data = bg.pr, aes(age.group, pct.expected, fill = year, group = year)) +
+  facet_wrap(~planning.region, ncol = 2, scales = "free_x") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_col_interactive(position = "dodge", aes(data_id = data_id, tooltip = paste(planning.region, "\nYear: ", year, "\nAge group", age.group, "\nYear population: ", comma(pop), "\nPopulation from previous census ten years younger: ", comma(comparison.pop), "\nPercent change/expected pop: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  geom_label(data = filter(bg.pr, year == "2020"), aes(label = percent(pct.expected, accuracy = .1)), show.legend = FALSE, position = position_dodge(width = .5), size = 3) +
+  coord_flip() +
+  labs(x="", 
+       y = "", 
+       color="", 
+       title = "Percent of expected population from previous census")+
+  scale_y_continuous(labels=scales::percent)+
+  scale_fill_manual(values = brewer.pal(n = 6, "RdYlBu")) +
+  theme_bar+
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+
+girafe(ggobj = bg.pr.plot, width_svg = 10, height_svg = 10) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE)) 
+```
+
+<br>
+
+## EDR
+
+**EDR 1, 2, 4, 5**
+
+EDR 1 follows a rural pattern but really struggles with older age cohorts.
+
+EDR 2, 4, 5 has a strong in-migration among older age cohorts.
+
+**EDR 6E, 7E, 7W**
+
+EDR 6E struggles with older age cohorts.
+
+EDR 7E and 7W do well with older age cohorts.
+
+**EDR 6W, 8, 9**
+
+All struggle with older age cohorts.
+
+<br>
+
+```{r}
+bg.edr <- master.bg %>% 
+  group_by(year, age.group, edr) %>%
+  summarize(pop = sum(pop),
+            comparison.pop = sum(comparison.pop)) %>%
+  ungroup() %>%
+  mutate(pct.expected = (pop - comparison.pop) / comparison.pop,
+         data_id = seq(n()),
+         year = as.factor(year))
+
+bg.edr.plot <- ggplot(data = bg.edr, aes(age.group, pct.expected, fill = year, group = year)) +
+  facet_wrap(~edr, ncol = 2, scales = "free_x") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_col_interactive(position = "dodge", aes(data_id = data_id, tooltip = paste(edr, "\nYear: ", year, "\nAge group", age.group, "\nYear population: ", comma(pop), "\nPopulation from previous census ten years younger: ", comma(comparison.pop), "\nPercent change/expected pop: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  geom_label(data = filter(bg.edr, year == "2020"), aes(label = percent(pct.expected, accuracy = .1)), show.legend = FALSE, position = position_dodge(width = .5), size = 3) +
+  coord_flip() +
+  labs(x="", 
+       y = "", 
+       color="", 
+       title = "Percent of expected population from previous census")+
+  scale_y_continuous(labels=scales::percent)+
+  scale_fill_manual(values = brewer.pal(n = 6, "RdYlBu")) +
+  theme_bar+
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+
+girafe(ggobj = bg.edr.plot, width_svg = 10, height_svg = 20) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE)) 
+```
+
+<br>
+
+## County
+
+One key theme here is that all patterns are becoming less robust.
+
+Rural counties tend to do well from 10 to 14 but gradually lost people as the approach 20. And then really do bad between 20 and 29.
+
+Rural counties do a lot better when people turn 30. They begin to do worse as they approach 45.
+
+Just as expected, retirees consolidate to north central Minnesota.
+
+Weird to see how much less robust this all is though.
+
+```{r}
+bg.county <- master.bg %>%
+  mutate(pct.expected = (pop - comparison.pop) / comparison.pop,
+         pct.expected.bins = cut(pct.expected,
+                                 breaks = c(-10, -.2, -.1, 0, .1, .2, 10),
+                                 labels = c("Less than -20%", "-20% to -10%", "-10% to -0%", "0% to 10%", "10% to 20%", "Greater than 20%"))) %>%
+  left_join(mn_counties[,c(5,7)], by = "countyfp")
+
+```
+
+::: panel-tabset
+### 10-14
+
+<br>
+
+```{r}
+bg.10_14.county.map <- ggplot(data = filter(bg.county, age.group == "10-14")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.10_14.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))      
+
+```
+
+<br>
+
+### 15-19
+
+<br>
+
+```{r}
+bg.15_19.county.map <- ggplot(data = filter(bg.county, age.group == "15-19")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.15_19.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))  
+```
+
+<br>
+
+### 20-24
+
+<br>
+
+```{r}
+bg.20_24.county.map <- ggplot(data = filter(bg.county, age.group == "20-24")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.20_24.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))  
+```
+
+<br>
+
+### 25-29
+
+<br>
+
+```{r}
+bg.25_29.county.map <- ggplot(data = filter(bg.county, age.group == "25-29")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.25_29.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))  
+```
+
+<br>
+
+### 30-34
+
+<br>
+
+```{r}
+bg.30_34.county.map <- ggplot(data = filter(bg.county, age.group == "30-34")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.30_34.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))  
+```
+
+<br>
+
+### 35-39
+
+<br>
+
+```{r}
+bg.35_39.county.map <- ggplot(data = filter(bg.county, age.group == "35-39")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.35_39.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))  
+```
+
+<br>
+
+### 40-44
+
+<br>
+
+```{r}
+bg.40_44.county.map <- ggplot(data = filter(bg.county, age.group == "40-44")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.40_44.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))  
+```
+
+<br>
+
+### 45-49
+
+<br>
+
+```{r}
+bg.45_49.county.map <- ggplot(data = filter(bg.county, age.group == "45-49")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.45_49.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))  
+```
+
+<br>
+
+### 50-54
+
+<br>
+
+```{r}
+bg.50_54.county.map <- ggplot(data = filter(bg.county, age.group == "50-54")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.50_54.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))  
+```
+
+<br>
+
+### 55-59
+
+<br>
+
+```{r}
+bg.55_59.county.map <- ggplot(data = filter(bg.county, age.group == "55-59")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.55_59.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))  
+```
+
+<br>
+
+### 60-64
+
+<br>
+
+```{r}
+bg.60_64.county.map <- ggplot(data = filter(bg.county, age.group == "60-64")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.60_64.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))  
+```
+
+<br>
+
+### 65-69
+
+<br>
+
+```{r}
+bg.65_69.county.map <- ggplot(data = filter(bg.county, age.group == "65-69")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.65_69.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE))  
+```
+
+<br>
+:::
+::::
+
+# Consolidated age groups
+
+Let's consolidate the age groups as follows;
+
+1.  10-14
+2.  20-29
+3.  30-44
+4.  45-59
+5.  60 and older
+
+The maps show a couple of clear trends.
+
+1.  All patterns are becoming less robust.
+2.  Rural counties tend to see an in-migration of 30 to 44 year olds along with their 10-14 year old children.
+3.  Central lakes of Minnesota tend to see an in-migration of 45 and older while all other regions experience a net out-migration.
+
+```{r}
+bg.consolidated <- master.bg %>%
+  mutate(age.group.consolidated = ifelse(age.group %in% c("10-14"), "10-14", 0),
+         age.group.consolidated = ifelse(age.group %in% c("20-24", "25-29"), "20-29", age.group.consolidated),
+         age.group.consolidated = ifelse(age.group %in% c("30-34", "35-39", "40-44"), "30-44", age.group.consolidated),
+         age.group.consolidated = ifelse(age.group %in% c("45-49", "50-54", "55-59"), "45-59", age.group.consolidated),
+         age.group.consolidated = ifelse(age.group %in% c("60-64", "65-69"), "60-69", age.group.consolidated)) %>%
+  filter(age.group.consolidated != "0") %>%
+  mutate(age.group.consolidated = fct_relevel(age.group.consolidated, "10-14", "20-29", "30-44", "45-59", "60-69")) %>%
+  group_by(year, countyfp, Name, age.group.consolidated) %>%
+  summarize(pop = sum(pop),
+            comparison.pop = sum(comparison.pop)) %>%
+  ungroup() %>%
+  mutate(pct.expected = (pop - comparison.pop) / comparison.pop,
+         pct.expected.bins = cut(pct.expected,
+                                 breaks = c(-10, -.2, -.1, 0, .1, .2, 10),
+                                 labels = c("Less than -20%", "-20% to -10%", "-10% to -0%", "0% to 10%", "10% to 20%", "Greater than 20%"))) %>%
+  left_join(mn_counties[,c(5,7)], by = "countyfp")
+
+```
+
+::: panel-tabset
+## 10-14
+
+<br>
+
+```{r}
+bg.10_14.county.map <- ggplot(data = filter(bg.consolidated, age.group.consolidated == "10-14")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group.consolidated, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.10_14.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE)) 
+```
+
+<br>
+
+## 20-29
+
+<br>
+
+```{r}
+bg.20_29.county.map <- ggplot(data = filter(bg.consolidated, age.group.consolidated == "20-29")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group.consolidated, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.20_29.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE)) 
+```
+
+<br>
+
+## 30-44
+
+<br>
+
+```{r}
+bg.30_44.county.map <- ggplot(data = filter(bg.consolidated, age.group.consolidated == "30-44")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group.consolidated, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.30_44.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE)) 
+```
+
+<br>
+
+## 45-59
+
+<br>
+
+```{r}
+bg.45_59.county.map <- ggplot(data = filter(bg.consolidated, age.group.consolidated == "45-59")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group.consolidated, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.45_59.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE)) 
+```
+
+<br>
+
+## 60-69
+
+<br>
+
+```{r}
+bg.60_69.county.map <- ggplot(data = filter(bg.consolidated, age.group.consolidated == "60-69")) +
+  facet_wrap(~year, ncol = 3) +
+  geom_sf_interactive(color = "grey85", aes(geometry = geometry, fill = pct.expected.bins, data_id = Name, tooltip = paste(Name, "\nYear: ", year, "\nAge group: ", age.group.consolidated, "\nPopulation: ", comma(pop), "\nPop from previous census when 10 years younger: ", comma(comparison.pop), "\nPercent difference: ", percent(pct.expected, accuracy = .1), sep = ""))) +
+  theme_sf+
+  scale_fill_manual(values = c("Less than -20%" = "#d73027", "-20% to -10%" = "#fc8d59", "-10% to -0%" = "#fee090", "0% to 10%" = "#e0f3f8",  "10% to 20%" = "#91bfdb", "Greater than 20%"= "#4575b4")) +
+  labs(title = "Percent of expected population from previous census") +
+  theme(legend.position = "bottom",
+        text = element_text(size = 16))
+
+girafe(ggobj = bg.60_69.county.map, width_svg = 7, height_svg = 7) %>%
+  girafe_options(opts_selection(type = "none"),
+                 opts_sizing(rescale = FALSE)) 
+```
+
+<br>
+:::

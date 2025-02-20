@@ -191,7 +191,7 @@ Let's first explore what the population trends have been over the last 15 years.
 
 The following charts provide the change in population from 2000 to 2023.
 
-Although the state has grown in population by 16.3% since 2000, that growth hasn't been even across the state, nor has it been even across rurality. Our most rural counties of Minnesota that are not categorized as "recreational" have experienced a population loss of 13.2% whereas entirely rural counties that are "recretaional" have experienced a population increase of 2.4%.
+Although the state has grown in population by 16.3% since 2000, that growth hasn't been even across the state, nor has it been even across rurality. Our most rural counties of Minnesota that are not categorized as "recreational" have experienced a population loss of 13.2% whereas entirely rural counties that are "recreational" have experienced a population increase of 2.4%.
 
 In addition, town/rural mix counties that are recreational have experienced an increase of 12.4% in population compared to a loss of 1.4%.
 
@@ -1166,12 +1166,18 @@ girafe(ggobj = plot_grid(births.county.map + theme(legend.position = "none"), de
 
 The next question is what is having the greatest impact on population change currently? This can be hard because not only can population go up or down (negative or positive) but so can all the components. So if there is net out migration, yet natural change is positive and population is increasing, how do you measure the impact of the net out migration?
 
-My first idea is to just create bar charts that breakdown each component as a percentage of the total change. Each component would be positive, thus deaths and births each count equally as a unit of change.
+<br>
+
+## Line charts
+
+This first group is line charts indicating trends in the percentage of total population unit change that each component comprises. Each component would be positive, thus deaths and births each count equally as a unit of change.
+
+The main theme is that deaths are becoming more prominent as a share of total population unit change. It's surpassing births in our most rural areas. In addition, domestic migration is becoming less harmful in rural areas, and in some cases, is contributing positively to total population unit change.
 
 ::: panel-tabset
 <br>
 
-## Minnesota
+### Minnesota
 
 The chart below clearly shows that births has been and continues to be the largest contributor to total unit change in population. However, it is shrinking. There is significant growth in deaths as a share of total unit population change. Migration just isn't that big of a piece.
 
@@ -1226,7 +1232,7 @@ girafe(ggobj = comp.change.pct.total.change.mn.plot, width_svg = 7, height_svg =
 
 <br>
 
-## RUCA
+### RUCA
 
 **Entirely rural**
 
@@ -1298,7 +1304,7 @@ girafe(ggobj = comp.change.pct.total.change.ruca.plot, width_svg = 7, height_svg
 
 <br>
 
-## Recreational
+### Recreational
 
 **Entirely rural**
 
@@ -1368,7 +1374,7 @@ girafe(ggobj = comp.change.pct.total.change.rec.plot, width_svg = 7, height_svg 
 
 <br>
 
-## Planning Region
+### Planning Region
 
 **Northwest, Central, Northeast**
 
@@ -1432,7 +1438,7 @@ girafe(ggobj = comp.change.pct.total.change.pr.plot, width_svg = 7, height_svg =
 
 <br>
 
-## EDR
+### EDR
 
 **EDR 1, 2, 4, 5**
 
@@ -1498,7 +1504,7 @@ girafe(ggobj = comp.change.pct.total.change.edr.plot, width_svg = 7, height_svg 
 
 <br>
 
-## County
+### County
 
 The maps below show a few key themes;
 
@@ -1594,3 +1600,5 @@ girafe(ggobj = plot_grid(births.pct.total.change.county.map + theme(legend.posit
 
 <br>
 :::
+
+# 

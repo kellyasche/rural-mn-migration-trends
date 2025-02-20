@@ -11,6 +11,8 @@ website:
         text: Summary
       - href: pop_estimates_components_of_change.qmd
         text: Population estimates - components of change
+      - href: migration_by_age_groups.qmd
+        text: Migration by age groups
       - lit_review.qmd
       - ipums_analysis.qmd
       - USPS_change_of_address.qmd
