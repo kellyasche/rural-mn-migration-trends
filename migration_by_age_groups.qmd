@@ -142,6 +142,13 @@ master.bg <- original.bg %>%
          edr = fct_relevel(edr, "EDR 1 - Northwest", "EDR 2 - Headwaters", "EDR 3 - Arrowhead", "EDR 4 - West Central", "EDR 5 - North Central", "EDR 6E- Southwest Central", "EDR 6W- Upper Minnesota Valley", "EDR 7E- East Central", "EDR 7W- Central", "EDR 8 - Southwest", "EDR 9 - South Central", "EDR 10 - Southeast", "EDR 11 - 7 County Twin Cities", "Minnesota"),
          recreational = fct_relevel(recreational, "Entirely rural", "Entirely rural - Recreational", "Town/rural mix", "Town/rural mix - Recreational", "Urban/town/rural mix", "Urban/town/rural mix - Recreational", "Entirely urban"))
 
+master.bg.new <- read_csv("Data/Brain gain/Master-migration-counties.csv") %>%
+  mutate(age.group = fct_relevel(age.group, "Under 5", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54", "55-59", "60-64", "65-69", "70-74", "75-79", "80-84", "85 and over"),
+         Dem_Desc = fct_relevel(Dem_Desc, "Entirely rural", "Town/rural mix", "Urban/town/rural mix", "Entirely urban"),
+         planning.region = fct_relevel(planning.region, "Northwest", "Northeast", "Central", "Seven County Mpls-St Paul", "Southwest", "Southeast"),
+         edr = fct_relevel(edr, "EDR 1 - Northwest", "EDR 2 - Headwaters", "EDR 3 - Arrowhead", "EDR 4 - West Central", "EDR 5 - North Central", "EDR 6E- Southwest Central", "EDR 6W- Upper Minnesota Valley", "EDR 7E- East Central", "EDR 7W- Central", "EDR 8 - Southwest", "EDR 9 - South Central", "EDR 10 - Southeast", "EDR 11 - 7 County Twin Cities", "Minnesota"),
+         recreational = fct_relevel(recreational, "Entirely rural", "Entirely rural - Recreational", "Town/rural mix", "Town/rural mix - Recreational", "Urban/town/rural mix", "Urban/town/rural mix - Recreational", "Entirely urban"))
+
 
 ```
 
